@@ -1,0 +1,1855 @@
+<!doctype html>
+<html lang="zh-CN" data-power="on" data-conn="online">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>屏幕挂灯</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --font: "Segoe UI Variable Text", "HarmonyOS Sans SC", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    --display: "Segoe UI Variable Display", "HarmonyOS Sans SC", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    --lamp: #ffd7ab;
+    --lamp-rgb: 255 215 171;
+    --text: #f8f4ed;
+    --text-2: #c9c2b6;
+    --text-3: #b5aea2;
+    --level: .58;
+    --glow: 1;
+  }
+
+  html[data-power="off"] { --glow: 0; }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font);
+    color: var(--text);
+    background: #0a0d10;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button, input { font: inherit; }
+  button { color: inherit; }
+
+  .room {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 82% 100%, #1c242a 0%, transparent 58%),
+      radial-gradient(80% 70% at 8% 0%, #19232b 0%, transparent 60%),
+      linear-gradient(158deg, #0f161b 0%, #0b0f13 46%, #090a0d 100%);
+  }
+
+  .room::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+    opacity: .035;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(24px);
+    pointer-events: none;
+  }
+
+  .orb-warm {
+    width: 780px;
+    height: 780px;
+    right: -240px;
+    bottom: -330px;
+    background: radial-gradient(circle, rgb(var(--lamp-rgb) / .3) 0%, rgb(var(--lamp-rgb) / .1) 38%, transparent 66%);
+    opacity: calc(var(--glow) * (.5 + var(--level) * .5));
+    transition: opacity .32s ease;
+  }
+
+  .orb-cool {
+    width: 900px;
+    height: 900px;
+    left: -330px;
+    top: -400px;
+    background: radial-gradient(circle, rgb(88 140 204 / .24) 0%, transparent 62%);
+  }
+
+  .orb-shade {
+    width: 620px;
+    height: 420px;
+    right: 70px;
+    top: 110px;
+    background: radial-gradient(ellipse, rgb(7 9 11 / .55) 0%, transparent 68%);
+    filter: blur(40px);
+  }
+
+  .backlight {
+    position: absolute;
+    right: 42px;
+    top: 190px;
+    width: 380px;
+    height: 540px;
+    border-radius: 46% 54% 48% 52% / 40% 42% 58% 60%;
+    background:
+      radial-gradient(70% 50% at 24% 16%, rgb(118 160 208 / .27) 0%, transparent 62%);
+    filter: blur(48px);
+    opacity: .85;
+    pointer-events: none;
+  }
+
+  .backlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(64% 46% at 78% 92%, rgb(var(--lamp-rgb) / .2) 0%, transparent 64%);
+    opacity: calc(var(--glow) * (.35 + var(--level) * .65));
+    transition: opacity .32s ease;
+  }
+
+  .taskbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 14px;
+    background: linear-gradient(180deg, rgb(24 27 32 / .48), rgb(10 12 15 / .74));
+    border-top: 1px solid rgb(255 255 255 / .07);
+    box-shadow: 0 -10px 30px rgb(0 0 0 / .18);
+    backdrop-filter: blur(28px) saturate(140%);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+  }
+
+  .tray-app {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: #d8d2c8;
+    background: rgb(255 255 255 / .055);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .08);
+  }
+
+  .tray-app::after {
+    content: "";
+    position: absolute;
+    right: 5px;
+    bottom: 6px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #82d9a4;
+    box-shadow: 0 0 0 2px #1a1e22, 0 0 7px rgb(130 217 164 / .8);
+  }
+
+  .tray-app svg { width: 18px; height: 18px; }
+
+  .clock {
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: right;
+    color: #d7d1c7;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+    padding-left: 6px;
+  }
+
+  .app {
+    position: fixed;
+    right: 24px;
+    bottom: 68px;
+    z-index: 30;
+    isolation: isolate;
+    width: 380px;
+    padding: 20px;
+    border-radius: 28px;
+    background:
+      radial-gradient(52% 9% at 24% 0%, rgb(255 255 255 / .17) 0%, transparent 100%),
+      radial-gradient(120% 80% at 6% 0%, rgb(255 255 255 / .1) 0%, rgb(255 255 255 / .04) 22%, transparent 48%),
+      radial-gradient(90% 55% at 94% 104%, rgb(var(--lamp-rgb) / .05) 0%, transparent 62%),
+      linear-gradient(130deg, rgb(255 255 255 / .055) 0%, rgb(255 255 255 / .01) 20%, transparent 34%),
+      linear-gradient(158deg, rgb(255 255 255 / .07) 0%, rgb(255 255 255 / .018) 34%, rgb(255 255 255 / .026) 72%, rgb(255 255 255 / .052) 100%),
+      rgb(18 20 25 / .46);
+    border: 1px solid transparent;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .2),
+      inset 1px 0 0 rgb(255 255 255 / .055),
+      inset -1px 0 0 rgb(255 255 255 / .035),
+      inset 0 -1px 0 rgb(255 255 255 / .05),
+      inset 0 -20px 40px rgb(0 0 0 / .12),
+      0 0 0 1px rgb(0 0 0 / .18),
+      0 28px 70px rgb(0 0 0 / .52),
+      0 3px 14px rgb(0 0 0 / .35);
+    backdrop-filter: blur(46px) saturate(168%) brightness(1.01);
+    -webkit-backdrop-filter: blur(46px) saturate(168%) brightness(1.01);
+    overflow: hidden;
+    animation: panel-in .3s cubic-bezier(.2, .8, .2, 1) both;
+  }
+
+  .app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(142deg, rgb(255 255 255 / .52) 0%, rgb(255 255 255 / .07) 24%, rgb(255 255 255 / .015) 52%, rgb(255 255 255 / .05) 76%, rgb(255 255 255 / .24) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .app::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    opacity: .06;
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+  }
+
+  .app > * { position: relative; z-index: 1; }
+
+  .view-settings {
+    position: absolute;
+    inset: 20px;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transform: translateX(26px);
+    pointer-events: none;
+    transition: opacity .2s ease, transform .3s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .app[data-view="settings"] .head,
+  .app[data-view="settings"] .stage,
+  .app[data-view="settings"] .controls {
+    opacity: 0;
+    transform: translateX(-26px);
+    pointer-events: none;
+  }
+
+  .app[data-view="settings"] .view-settings {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(8px) scale(.986); filter: blur(6px); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    transition: opacity .2s ease, transform .3s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .identity h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: .008em;
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 0;
+    font-size: 11px;
+    line-height: 1.4;
+    letter-spacing: .02em;
+    color: var(--text-3);
+  }
+
+  .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #82d9a4;
+    box-shadow: 0 0 7px rgb(130 217 164 / .65);
+    transition: background .24s ease, box-shadow .24s ease;
+  }
+
+  html[data-conn="offline"] .status-dot,
+  html[data-conn="connecting"] .status-dot {
+    background: #e2a75e;
+    box-shadow: 0 0 7px rgb(226 167 94 / .6);
+  }
+
+  html[data-conn="connecting"] .status-dot {
+    animation: dot-breathe 1.3s ease-in-out infinite;
+  }
+
+  @keyframes dot-breathe {
+    0%, 100% { opacity: .45; transform: scale(.82); }
+    50% { opacity: 1; transform: scale(1.06); }
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    margin-top: -3px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    border: 1px solid rgb(255 255 255 / .07);
+    border-radius: 50%;
+    background: rgb(255 255 255 / .055);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .1);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background .18s ease, color .18s ease, transform .18s ease;
+  }
+
+  .icon-btn:hover { background: rgb(255 255 255 / .11); color: var(--text); }
+  .icon-btn:active { transform: scale(.95); }
+  .icon-btn:focus-visible { outline: 2px solid rgb(255 255 255 / .7); outline-offset: 2px; }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  .stage {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 196px;
+    margin-top: 14px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / .06);
+    border-radius: 20px;
+    background:
+      radial-gradient(96% 70% at 50% 0%, rgb(255 255 255 / .045) 0%, transparent 64%),
+      radial-gradient(92% 64% at 50% 118%, rgb(var(--lamp-rgb) / .05) 0%, transparent 62%),
+      linear-gradient(180deg, #15171c 0%, #101216 56%, #090a0d 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .075),
+      inset 0 -24px 38px rgb(0 0 0 / .4);
+    cursor: pointer;
+    transition: border-color .2s ease, opacity .2s ease, transform .3s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .stage:hover { border-color: rgb(255 255 255 / .105); }
+  .stage:active .lightbar { filter: brightness(1.06); }
+  .stage:focus-visible { outline: 2px solid rgb(255 255 255 / .72); outline-offset: 3px; }
+
+  .stage-pill {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid rgb(255 255 255 / .1);
+    border-radius: 99px;
+    background: rgb(11 13 16 / .68);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .08),
+      0 4px 14px rgb(0 0 0 / .4);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: .02em;
+    color: var(--text-2);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, 5px);
+    transition: opacity .24s ease, transform .24s ease;
+    pointer-events: none;
+  }
+
+  .stage-pill .pill-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: #e2a75e;
+    box-shadow: 0 0 6px rgb(226 167 94 / .7);
+  }
+
+  .stage-pill .pill-spinner {
+    display: none;
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border: 1.5px solid rgb(226 167 94 / .28);
+    border-top-color: #e2a75e;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  html[data-conn="offline"] .stage-pill,
+  html[data-conn="connecting"] .stage-pill {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  html[data-conn="connecting"] .stage-pill .pill-dot { display: none; }
+  html[data-conn="connecting"] .stage-pill .pill-spinner { display: block; }
+
+  .desk {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 163px;
+    bottom: 0;
+    z-index: 1;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / .045) 0%, transparent 5%),
+      linear-gradient(180deg, #111419 0%, #0c0e12 58%, #08090c 100%);
+    box-shadow: inset 0 -20px 28px rgb(0 0 0 / .2);
+  }
+
+  .desk::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -14px;
+    width: 264px;
+    height: 24px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgb(0 0 0 / .5) 0%, transparent 70%);
+    filter: blur(7px);
+  }
+
+  .monitor {
+    position: absolute;
+    left: 50%;
+    top: 38px;
+    z-index: 3;
+    width: 218px;
+    height: 122px;
+    transform: translateX(-50%);
+    border: 1px solid rgb(255 255 255 / .075);
+    border-radius: 9px;
+    background: linear-gradient(180deg, #25282e 0%, #17191d 54%, #0e1013 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .16),
+      inset 0 -1px 0 rgb(255 255 255 / .035),
+      0 16px 34px rgb(0 0 0 / .52),
+      0 3px 9px rgb(0 0 0 / .45);
+  }
+
+  .display {
+    position: absolute;
+    inset: 3px 3px 7px;
+    overflow: hidden;
+    border-radius: 6px;
+    background:
+      radial-gradient(96% 72% at 26% 108%, rgb(88 110 132 / .14) 0%, transparent 60%),
+      radial-gradient(90% 70% at 78% 106%, rgb(48 62 78 / .22) 0%, transparent 64%),
+      linear-gradient(180deg, #192027 0%, #0f1318 58%, #090c0f 100%);
+    box-shadow:
+      inset 0 0 30px rgb(0 0 0 / .46),
+      inset 0 1px 0 rgb(255 255 255 / .045);
+  }
+
+  .display::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(116deg, transparent 0 31%, rgb(255 255 255 / .035) 39%, transparent 52%),
+      radial-gradient(64% 36% at 82% 7%, rgb(255 255 255 / .04) 0%, transparent 66%);
+    pointer-events: none;
+  }
+
+  .display::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgb(var(--lamp-rgb) / .14) 0%, transparent 24%);
+    opacity: calc(var(--glow) * var(--level));
+    mix-blend-mode: screen;
+    transition: opacity .32s ease;
+  }
+
+  .monitor::before {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 0;
+    height: 1px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, transparent, rgb(var(--lamp-rgb) / .45) 26%, rgb(var(--lamp-rgb) / .45) 74%, transparent);
+    opacity: calc(var(--glow) * var(--level) * .55);
+    transition: opacity .32s ease;
+  }
+
+  .monitor::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 3px;
+    width: 2px;
+    height: 2px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgb(255 255 255 / .2);
+    box-shadow: 0 0 4px rgb(255 255 255 / .12);
+  }
+
+  .neck {
+    position: absolute;
+    left: 50%;
+    top: 160px;
+    z-index: 2;
+    width: 32px;
+    height: 11px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #25292f 0%, #191c21 55%, #101216 100%);
+    clip-path: polygon(16% 0, 84% 0, 100% 100%, 0 100%);
+  }
+
+  .foot {
+    position: absolute;
+    left: 50%;
+    top: 170px;
+    z-index: 4;
+    width: 76px;
+    height: 5px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+    background: linear-gradient(180deg, #2b2f35 0%, #181a1f 46%, #0e1013 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .12),
+      0 3px 8px rgb(0 0 0 / .5);
+  }
+
+  .pool {
+    position: absolute;
+    left: 50%;
+    top: 164px;
+    z-index: 2;
+    width: 342px;
+    height: 42px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background:
+      radial-gradient(52% 74% at 50% 22%, rgb(var(--lamp-rgb) / .52) 0%, transparent 72%),
+      radial-gradient(100% 78% at 50% 34%, rgb(var(--lamp-rgb) / .15) 0%, transparent 80%);
+    filter: blur(10px);
+    opacity: calc(var(--glow) * (.34 + var(--level) * .66));
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transition: opacity .32s ease;
+  }
+
+  .halo {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    z-index: 2;
+    width: 340px;
+    height: 118px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at 50% 54%, rgb(var(--lamp-rgb) / .16) 0%, rgb(var(--lamp-rgb) / .05) 42%, transparent 72%);
+    filter: blur(20px);
+    opacity: calc(var(--glow) * (.12 + var(--level) * .46));
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transition: opacity .32s ease;
+  }
+
+  .spill {
+    position: absolute;
+    left: 50%;
+    top: 22px;
+    z-index: 2;
+    width: 180px;
+    height: 20px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgb(var(--lamp-rgb) / .2) 0%, rgb(var(--lamp-rgb) / .05) 54%, transparent 100%);
+    filter: blur(8px);
+    opacity: calc(var(--glow) * var(--level));
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transition: opacity .32s ease;
+  }
+
+  .mount {
+    position: absolute;
+    left: 50%;
+    top: 27px;
+    z-index: 4;
+    width: 18px;
+    height: 20px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #4c4f56 0%, #2e3137 48%, #15171b 100%);
+    clip-path: polygon(22% 0, 78% 0, 100% 100%, 0 100%);
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / .5));
+  }
+
+  .mount::before {
+    content: "";
+    position: absolute;
+    left: 22%;
+    right: 22%;
+    top: 0;
+    height: 1px;
+    background: rgb(255 255 255 / .22);
+  }
+
+  .lightbar {
+    position: absolute;
+    left: 50%;
+    top: 17px;
+    z-index: 6;
+    width: 184px;
+    height: 15px;
+    transform: translateX(-50%);
+    border-radius: 99px;
+    background: linear-gradient(180deg, #56585f 0%, #3a3c43 11%, #202227 52%, #101215 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .38),
+      inset 0 -1px 1px rgb(0 0 0 / .65),
+      0 3px 8px rgb(0 0 0 / .5);
+    transition: background .32s ease, box-shadow .32s ease;
+  }
+
+  .lightbar::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    border-radius: 99px 2px 2px 99px;
+    background: linear-gradient(180deg, #3f4147 0%, #26282d 55%, #131518 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .2),
+      inset -1px 0 0 rgb(0 0 0 / .42);
+  }
+
+  .lightbar::after {
+    content: "";
+    position: absolute;
+    left: 9px;
+    right: 24px;
+    top: 1px;
+    height: 1px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / .72) 16%, rgb(255 255 255 / .72) 84%, transparent);
+    opacity: .3;
+    transition: opacity .32s ease;
+  }
+
+  .emitter {
+    position: absolute;
+    left: 7px;
+    right: 20px;
+    bottom: 2px;
+    height: 4px;
+    border-radius: 99px;
+    background: linear-gradient(180deg, rgb(255 255 255 / .11) 0%, rgb(255 255 255 / .05) 52%, rgb(0 0 0 / .3) 100%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .1);
+    transition: background .32s ease, box-shadow .32s ease;
+  }
+
+  html[data-power="on"] .lightbar {
+    background: linear-gradient(180deg, #5b5c62 0%, #3d3e45 11%, #222429 52%, #121417 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .42),
+      inset 0 -1px 1px rgb(0 0 0 / .6),
+      0 0 14px color-mix(in srgb, var(--lamp) 12%, transparent),
+      0 3px 8px rgb(0 0 0 / .46);
+  }
+
+  html[data-power="on"] .lightbar::before {
+    background: linear-gradient(180deg, #45423c 0%, #2a2723 55%, #17140f 100%);
+  }
+
+  html[data-power="on"] .lightbar::after { opacity: .46; }
+
+  html[data-power="on"] .emitter {
+    background: linear-gradient(180deg, #fffdf6 0%, #fff4e4 48%, color-mix(in srgb, var(--lamp) 58%, #fff) 100%);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 0 3px color-mix(in srgb, var(--lamp) 46%, transparent),
+      0 2px 7px color-mix(in srgb, var(--lamp) 20%, transparent);
+  }
+
+  .bar-switch {
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 28%, #3c3e44 0%, #232529 46%, #101216 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .24),
+      inset 0 -1px 1px rgb(0 0 0 / .5),
+      0 2px 5px rgb(0 0 0 / .5);
+    color: rgb(255 255 255 / .4);
+    transition: background .32s ease, color .32s ease, box-shadow .32s ease;
+  }
+
+  html[data-power="on"] .bar-switch {
+    background: radial-gradient(circle at 36% 28%, #4b463c 0%, #292419 50%, #131009 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .28),
+      inset 0 0 0 1px rgb(var(--lamp-rgb) / .2),
+      0 0 10px rgb(var(--lamp-rgb) / .26),
+      0 2px 5px rgb(0 0 0 / .48);
+    color: color-mix(in srgb, var(--lamp) 86%, #fff);
+  }
+
+  .stage:hover .bar-switch { color: var(--text-2); }
+  html[data-power="on"] .stage:hover .bar-switch { color: color-mix(in srgb, var(--lamp) 86%, #fff); }
+
+  .bar-switch svg {
+    width: 8px;
+    height: 8px;
+    transition: filter .32s ease;
+  }
+
+  html[data-power="on"] .bar-switch svg { filter: drop-shadow(0 0 2.5px rgb(var(--lamp-rgb) / .65)); }
+
+  .controls {
+    margin-top: 18px;
+    transition: opacity .24s ease, filter .24s ease, transform .3s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  html[data-conn="offline"] .controls,
+  html[data-conn="connecting"] .controls {
+    opacity: .4;
+    filter: saturate(.5);
+    pointer-events: none;
+  }
+
+  .control-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 7px;
+  }
+
+  .control-head label,
+  .mode-title {
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: .015em;
+    color: var(--text-2);
+  }
+
+  .readout {
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: .015em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .unit {
+    margin-left: 3px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--text-2);
+    letter-spacing: .01em;
+    opacity: .72;
+  }
+
+  .unit.pct { margin-left: 1px; letter-spacing: 0; }
+
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 99px;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--lamp) 52%, #5e4326) 0%, var(--lamp) 100%) left / var(--pct, 58%) 100% no-repeat,
+      linear-gradient(90deg, rgb(255 255 255 / .135) 0%, rgb(255 255 255 / .085) 100%);
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / .5),
+      inset 0 -1px 0 rgb(255 255 255 / .05);
+    transition: background .18s ease;
+  }
+
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -8px;
+    border: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 27%, #fff 0%, #fff8ec 34%, var(--lamp) 82%, color-mix(in srgb, var(--lamp) 72%, #5a3f24) 100%);
+    box-shadow:
+      0 2px 7px rgb(0 0 0 / .45),
+      0 0 11px rgb(var(--lamp-rgb) / .4),
+      inset 0 0 0 1px rgb(255 255 255 / .6);
+    transition: box-shadow .18s ease;
+  }
+
+  .slider:hover::-webkit-slider-thumb {
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / .45),
+      0 0 16px rgb(var(--lamp-rgb) / .6),
+      inset 0 0 0 1px rgb(255 255 255 / .75);
+  }
+
+  .slider:focus-visible::-webkit-slider-runnable-track {
+    outline: 2px solid rgb(255 255 255 / .6);
+    outline-offset: 5px;
+  }
+
+  .slider.temp::-webkit-slider-runnable-track {
+    background: linear-gradient(90deg, #ffa05a 0%, #ffc995 25%, #ffe9d0 47%, #fbf5ed 64%, #e6effb 83%, #cfdff6 100%);
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / .38),
+      inset 0 -1px 0 rgb(255 255 255 / .18);
+  }
+
+  .slider.temp::-webkit-slider-thumb {
+    background: radial-gradient(circle at 34% 27%, #fff 0%, #fdfaf4 52%, #e7e1d7 100%);
+    box-shadow:
+      0 2px 7px rgb(0 0 0 / .45),
+      0 0 0 3px rgb(var(--lamp-rgb) / .22),
+      inset 0 0 0 1px rgb(255 255 255 / .8);
+  }
+
+  .scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: -1px;
+    font-size: 11px;
+    line-height: 1.4;
+    letter-spacing: .03em;
+    color: var(--text-3);
+  }
+
+  .control + .control { margin-top: 15px; }
+
+  .mode { margin-top: 18px; }
+
+  .mode-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .mode-state {
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: .02em;
+    color: var(--text-3);
+    opacity: 0;
+    transition: opacity .2s ease;
+  }
+
+  .mode-state.is-visible { opacity: 1; }
+
+  .segmented {
+    position: relative;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid rgb(255 255 255 / .055);
+    border-radius: 13px;
+    background: rgb(8 8 10 / .3);
+    box-shadow:
+      inset 0 2px 5px rgb(0 0 0 / .32),
+      inset 0 -1px 0 rgb(255 255 255 / .04);
+  }
+
+  .seg-thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc((100% - 12px) / 4);
+    border-radius: 9px;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / .15) 0%, rgb(255 255 255 / .06) 100%),
+      rgb(var(--lamp-rgb) / .09);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .24),
+      inset 0 0 0 1px rgb(var(--lamp-rgb) / .12),
+      0 2px 7px rgb(0 0 0 / .25);
+    opacity: 0;
+    transform: translateX(calc(var(--slot, 0) * (100% + 2px)));
+    transition: transform .26s cubic-bezier(.2, .8, .2, 1), opacity .18s ease;
+    pointer-events: none;
+  }
+
+  .segmented.has-thumb .seg-thumb { opacity: 1; }
+
+  .segmented button {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    cursor: pointer;
+    transition: color .16s ease;
+  }
+
+  .segmented button:hover { color: var(--text-2); }
+
+  .segmented button.active { color: var(--text); }
+
+  .segmented button:focus-visible {
+    outline: 2px solid rgb(255 255 255 / .66);
+    outline-offset: -1px;
+  }
+
+  .footer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 14px;
+  }
+
+  .footer::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgb(255 255 255 / .02) 0%, rgb(255 255 255 / .09) 22%, rgb(255 255 255 / .05) 78%, rgb(255 255 255 / .015) 100%);
+  }
+
+  .switch-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .switch-title {
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: .015em;
+    color: var(--text-2);
+  }
+
+  .switch-note {
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--text-3);
+  }
+
+  .switch {
+    position: relative;
+    flex: none;
+    width: 40px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / .08);
+    border-radius: 99px;
+    background: rgb(8 8 10 / .38);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / .4);
+    cursor: pointer;
+    transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  }
+
+  .switch span {
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: linear-gradient(180deg, #fdfaf5 0%, #d8d1c6 100%);
+    box-shadow:
+      0 1px 3px rgb(0 0 0 / .45),
+      inset 0 1px 0 #fff;
+    transition: left .2s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .switch[aria-checked="true"] {
+    border-color: color-mix(in srgb, var(--lamp) 26%, transparent);
+    background: color-mix(in srgb, var(--lamp) 58%, #403328);
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / .22),
+      0 0 12px -5px rgb(var(--lamp-rgb) / .75);
+  }
+
+  .switch[aria-checked="true"] span { left: 18px; }
+  .switch:focus-visible { outline: 2px solid rgb(255 255 255 / .7); outline-offset: 3px; }
+
+  .settings-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+  }
+
+  .settings-title {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .012em;
+    color: var(--text);
+  }
+
+  .back-btn {
+    width: 32px;
+    height: 32px;
+    margin-left: -2px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    border: 1px solid rgb(255 255 255 / .07);
+    border-radius: 50%;
+    background: rgb(255 255 255 / .055);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .1);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background .16s ease, color .16s ease, transform .16s ease;
+  }
+
+  .back-btn:hover { background: rgb(255 255 255 / .11); color: var(--text); }
+  .back-btn:active { transform: scale(.95); }
+  .back-btn:focus-visible { outline: 2px solid rgb(255 255 255 / .7); outline-offset: 2px; }
+  .back-btn svg { width: 15px; height: 15px; }
+
+  .settings-body { margin-top: 2px; }
+
+  .group-title {
+    margin: 18px 0 7px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .055em;
+    color: var(--text-3);
+  }
+
+  .group-title.with-hint {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .group-hint {
+    font-size: 10.5px;
+    letter-spacing: .02em;
+    opacity: .75;
+  }
+
+  .group {
+    border: 1px solid rgb(255 255 255 / .06);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgb(255 255 255 / .045) 0%, rgb(255 255 255 / .02) 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .06),
+      0 1px 2px rgb(0 0 0 / .14);
+    overflow: hidden;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 12px;
+  }
+
+  .row + .row { box-shadow: inset 0 1px 0 rgb(255 255 255 / .05); }
+
+  .row.master { min-height: 48px; }
+
+  .row-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .row-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: .012em;
+    color: var(--text-2);
+  }
+
+  .row.master .row-label { color: var(--text); }
+
+  .row-note {
+    font-size: 10.5px;
+    line-height: 1.35;
+    color: var(--text-3);
+  }
+
+  .row > .switch,
+  .row > .mini-btn { margin-left: auto; }
+
+  .hotkey-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 2px;
+    padding: 2px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    cursor: pointer;
+    transition: background .16s ease;
+  }
+
+  .keys:hover { background: rgb(255 255 255 / .05); }
+  .keys:focus-visible { outline: 2px solid rgb(255 255 255 / .6); outline-offset: 1px; }
+
+  .keys kbd {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(255 255 255 / .085);
+    border-radius: 5px;
+    background: rgb(255 255 255 / .06);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .1),
+      0 1px 1px rgb(0 0 0 / .22);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    color: var(--text-2);
+  }
+
+  .keys.is-capturing kbd { display: none; }
+
+  .keys.is-capturing::after {
+    content: "按下组合键…";
+    padding: 0 4px;
+    font-size: 10.5px;
+    color: color-mix(in srgb, var(--lamp) 55%, var(--text-2));
+  }
+
+  .row.hotkey { transition: opacity .2s ease; }
+
+  .group.hotkeys-locked .row.hotkey { opacity: .4; }
+
+  .group.hotkeys-locked .row.hotkey .keys,
+  .group.hotkeys-locked .row.hotkey .switch { pointer-events: none; }
+
+  .group.hotkeys-locked .row.hotkey .switch[aria-checked="true"] {
+    border-color: rgb(255 255 255 / .08);
+    background: rgb(8 8 10 / .38);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / .4);
+  }
+
+  .switch.sm {
+    width: 34px;
+    height: 20px;
+  }
+
+  .switch.sm span {
+    width: 14px;
+    height: 14px;
+  }
+
+  .switch.sm[aria-checked="true"] span { left: 16px; }
+
+  .switch:disabled { cursor: default; }
+
+  .row-value {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+  }
+
+  .conn-value { margin-left: auto; }
+
+  .mini-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: #82d9a4;
+    box-shadow: 0 0 6px rgb(130 217 164 / .55);
+  }
+
+  html[data-conn="offline"] .mini-dot,
+  html[data-conn="connecting"] .mini-dot {
+    background: #e2a75e;
+    box-shadow: 0 0 6px rgb(226 167 94 / .5);
+  }
+
+  .mini-btn {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / .07);
+    border-radius: 8px;
+    background: rgb(255 255 255 / .05);
+    color: var(--text-3);
+    cursor: pointer;
+    transition: background .16s ease, color .16s ease, transform .16s ease;
+  }
+
+  .mini-btn:hover { background: rgb(255 255 255 / .1); color: var(--text); }
+  .mini-btn:active { transform: scale(.94); }
+  .mini-btn:focus-visible { outline: 2px solid rgb(255 255 255 / .65); outline-offset: 2px; }
+  .mini-btn svg { width: 13px; height: 13px; }
+  .mini-btn.is-spinning svg { animation: spin .8s linear infinite; }
+
+  .device-value {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .device-name {
+    font-size: 11.5px;
+    color: var(--text-2);
+    letter-spacing: .01em;
+  }
+
+  .row-sub {
+    font-size: 10px;
+    letter-spacing: .02em;
+    color: var(--text-3);
+    opacity: .75;
+  }
+
+  .row.device { min-height: 46px; }
+
+  .settings-foot {
+    margin-top: auto;
+    padding-top: 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10.5px;
+    letter-spacing: .03em;
+    color: var(--text-3);
+    opacity: .75;
+  }
+
+  html[data-conn="offline"] .halo,
+  html[data-conn="offline"] .pool,
+  html[data-conn="offline"] .spill,
+  html[data-conn="offline"] .display::after,
+  html[data-conn="offline"] .monitor::before {
+    opacity: 0;
+  }
+
+  html[data-conn="offline"] .lightbar {
+    background: linear-gradient(180deg, #4a4b50 0%, #33353a 11%, #1c1e22 52%, #0e1013 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .3),
+      inset 0 -1px 1px rgb(0 0 0 / .6),
+      0 3px 8px rgb(0 0 0 / .5);
+  }
+
+  html[data-conn="offline"] .lightbar::before {
+    background: linear-gradient(180deg, #35373c 0%, #232529 55%, #121417 100%);
+  }
+
+  html[data-conn="offline"] .lightbar::after { opacity: .16; }
+
+  html[data-conn="offline"] .emitter {
+    background: linear-gradient(180deg, rgb(255 255 255 / .12) 0%, rgb(255 255 255 / .05) 52%, rgb(0 0 0 / .3) 100%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .08);
+  }
+
+  html[data-conn="offline"] .bar-switch {
+    background: radial-gradient(circle at 36% 28%, #34363b 0%, #1d1f23 50%, #0e1013 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .2),
+      inset 0 -1px 1px rgb(0 0 0 / .5),
+      0 2px 5px rgb(0 0 0 / .5);
+    color: rgb(255 255 255 / .3);
+  }
+
+  html[data-conn="offline"] .bar-switch svg { filter: none; }
+
+  html[data-power="off"] .slider::-webkit-slider-runnable-track { filter: saturate(.35) brightness(.82); }
+  html[data-power="off"] .slider::-webkit-slider-thumb {
+    background: radial-gradient(circle at 34% 27%, #fff 0%, #eee9e1 38%, #bcb5ab 100%);
+    box-shadow:
+      0 2px 7px rgb(0 0 0 / .45),
+      inset 0 0 0 1px rgb(255 255 255 / .55);
+  }
+
+  ::selection { background: color-mix(in srgb, var(--lamp) 38%, transparent); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      transition-duration: .001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="room" aria-hidden="true">
+    <div class="orb orb-cool"></div>
+    <div class="orb orb-warm"></div>
+    <div class="orb orb-shade"></div>
+    <div class="backlight"></div>
+  </div>
+
+  <main class="app" data-view="main">
+    <header class="head">
+      <div class="identity">
+        <h1>屏幕挂灯</h1>
+        <p class="status"><span class="status-dot"></span><span id="statusText">局域网直连</span></p>
+      </div>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="设置" title="设置">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6h7.2M13.8 6H17M3 14h3.2M9.8 14H17"/>
+          <circle cx="12.1" cy="6" r="1.7"/>
+          <circle cx="8.1" cy="14" r="1.7"/>
+        </svg>
+      </button>
+    </header>
+
+    <button class="stage" id="stage" type="button" aria-pressed="true" aria-label="关闭挂灯" title="开关挂灯">
+      <span class="halo"></span>
+      <span class="desk"></span>
+      <span class="pool"></span>
+      <span class="mount"></span>
+      <span class="neck"></span>
+      <span class="monitor"><span class="display"></span></span>
+      <span class="foot"></span>
+      <span class="spill"></span>
+      <span class="lightbar">
+        <span class="emitter"></span>
+        <span class="bar-switch">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M8 2.6v4.6"/>
+            <path d="M4.9 4.5a4.7 4.7 0 1 0 6.2 0"/>
+          </svg>
+        </span>
+      </span>
+      <span class="stage-pill" id="stagePill" aria-live="polite">
+        <span class="pill-spinner" aria-hidden="true"></span>
+        <span class="pill-dot" aria-hidden="true"></span>
+        <span id="pillText">设备离线 · 点按重连</span>
+      </span>
+    </button>
+
+    <section class="controls" aria-label="灯光调节">
+      <div class="control">
+        <div class="control-head">
+          <label for="brightness">亮度</label>
+          <output class="readout" for="brightness"><span id="brightnessVal">58</span><span class="unit pct">%</span></output>
+        </div>
+        <input class="slider" id="brightness" type="range" min="1" max="100" step="1" value="58" aria-valuetext="亮度 58%">
+      </div>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="temp">色温</label>
+          <output class="readout" for="temp"><span id="tempVal">4000</span><span class="unit">K</span></output>
+        </div>
+        <input class="slider temp" id="temp" type="range" min="2700" max="6500" step="100" value="4000" aria-valuetext="色温 4000 K">
+        <div class="scale"><span>暖光</span><span>冷光</span></div>
+      </div>
+
+      <div class="mode">
+        <div class="mode-head">
+          <span class="mode-title">模式</span>
+          <span class="mode-state is-visible" id="modeState">自定义</span>
+        </div>
+        <div class="segmented" id="segmented" role="group" aria-label="预设模式">
+          <span class="seg-thumb" aria-hidden="true"></span>
+          <button type="button" data-mode="office" title="办公：100% 亮度，6000 K">办公</button>
+          <button type="button" data-mode="focus" title="专注：80% 亮度，5000 K">专注</button>
+          <button type="button" data-mode="read" title="阅读：100% 亮度，4000 K">阅读</button>
+          <button type="button" data-mode="relax" title="休闲：30% 亮度，2700 K">休闲</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="switch-copy">
+          <span class="switch-title">自动补光</span>
+          <span class="switch-note">随环境光自动调节</span>
+        </div>
+        <button class="switch" id="autoFill" type="button" role="switch" aria-checked="true" aria-label="自动补光"><span></span></button>
+      </div>
+    </section>
+
+    <section class="view view-settings" id="settingsView" aria-label="设置" aria-hidden="true" inert>
+      <header class="settings-head">
+        <button class="back-btn" id="backBtn" type="button" aria-label="返回" title="返回">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.8 3.6 5.4 8l4.4 4.4"/>
+          </svg>
+        </button>
+        <h2 class="settings-title">设置</h2>
+      </header>
+
+      <div class="settings-body">
+        <p class="group-title with-hint"><span>快捷键</span><span class="group-hint">点击键帽修改</span></p>
+        <div class="group hotkeys-locked" id="hotkeyGroup">
+          <div class="row master">
+            <span class="row-copy">
+              <span class="row-label">全局快捷键</span>
+              <span class="row-note">在其他窗口也能控制挂灯</span>
+            </span>
+            <button class="switch" id="hotkeyMaster" type="button" role="switch" aria-checked="false" aria-label="全局快捷键"><span></span></button>
+          </div>
+          <div class="row hotkey">
+            <span class="row-label">开 / 关挂灯</span>
+            <span class="hotkey-side">
+              <button class="keys" type="button" title="点击修改快捷键" aria-label="开 / 关挂灯快捷键 Ctrl Alt L，点击修改">
+                <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>L</kbd>
+              </button>
+              <button class="switch sm" type="button" role="switch" aria-checked="true" aria-label="开 / 关挂灯快捷键" disabled><span></span></button>
+            </span>
+          </div>
+          <div class="row hotkey">
+            <span class="row-label">亮度增加</span>
+            <span class="hotkey-side">
+              <button class="keys" type="button" title="点击修改快捷键" aria-label="亮度增加快捷键 Ctrl Alt ↑，点击修改">
+                <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>↑</kbd>
+              </button>
+              <button class="switch sm" type="button" role="switch" aria-checked="true" aria-label="亮度增加快捷键" disabled><span></span></button>
+            </span>
+          </div>
+          <div class="row hotkey">
+            <span class="row-label">亮度降低</span>
+            <span class="hotkey-side">
+              <button class="keys" type="button" title="点击修改快捷键" aria-label="亮度降低快捷键 Ctrl Alt ↓，点击修改">
+                <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>↓</kbd>
+              </button>
+              <button class="switch sm" type="button" role="switch" aria-checked="true" aria-label="亮度降低快捷键" disabled><span></span></button>
+            </span>
+          </div>
+        </div>
+
+        <p class="group-title">启动</p>
+        <div class="group">
+          <div class="row">
+            <span class="row-copy">
+              <span class="row-label">登录时启动</span>
+              <span class="row-note">后台常驻托盘</span>
+            </span>
+            <button class="switch" id="autostart" type="button" role="switch" aria-checked="true" aria-label="登录时启动"><span></span></button>
+          </div>
+          <div class="row">
+            <span class="row-copy">
+              <span class="row-label">启动时显示面板</span>
+              <span class="row-note">关闭则静默运行在托盘</span>
+            </span>
+            <button class="switch" id="showOnLaunch" type="button" role="switch" aria-checked="false" aria-label="启动时显示面板"><span></span></button>
+          </div>
+        </div>
+
+        <p class="group-title">设备</p>
+        <div class="group">
+          <div class="row">
+            <span class="row-label">连接</span>
+            <span class="row-value conn-value">
+              <span class="mini-dot" aria-hidden="true"></span>
+              <span id="connText">192.168.137.24 · 12 ms</span>
+            </span>
+            <button class="mini-btn" id="reconnectBtn" type="button" aria-label="重新连接" title="重新连接">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13.3 8a5.3 5.3 0 1 1-1.6-3.8"/>
+                <path d="M13.6 2.6v3.2h-3.2"/>
+              </svg>
+            </button>
+          </div>
+          <div class="row device">
+            <span class="row-label">设备</span>
+            <span class="row-value device-value">
+              <span class="device-name">屏幕挂灯 2</span>
+              <span class="row-sub">yeelink.light.lamp43</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <footer class="settings-foot">
+        <span>v0.1.0</span>
+        <span>本地直连 · 不经过云端</span>
+      </footer>
+    </section>
+  </main>
+
+  <div class="taskbar" aria-hidden="true">
+    <div class="tray-app">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M7.5 4.8h9"/>
+        <rect x="4.2" y="7.6" width="15.6" height="10.2" rx="2"/>
+        <path d="M12 17.8v2.2M9.2 20h5.6"/>
+      </svg>
+    </div>
+    <div class="clock">23:14<br>2026/10/27</div>
+  </div>
+
+<script>
+  const root = document.documentElement;
+  const app = document.querySelector(".app");
+  const stage = document.getElementById("stage");
+  const brightness = document.getElementById("brightness");
+  const temp = document.getElementById("temp");
+  const brightnessVal = document.getElementById("brightnessVal");
+  const tempVal = document.getElementById("tempVal");
+  const autoFill = document.getElementById("autoFill");
+  const modeState = document.getElementById("modeState");
+  const segmented = document.getElementById("segmented");
+  const modeButtons = [...document.querySelectorAll("[data-mode]")];
+  const statusText = document.getElementById("statusText");
+  const pillText = document.getElementById("pillText");
+  const connText = document.getElementById("connText");
+  const reconnectBtn = document.getElementById("reconnectBtn");
+  const settingsView = document.getElementById("settingsView");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const backBtn = document.getElementById("backBtn");
+  const hotkeyGroup = document.getElementById("hotkeyGroup");
+  const hotkeyMaster = document.getElementById("hotkeyMaster");
+  const hotkeyRowSwitches = [...hotkeyGroup.querySelectorAll(".row.hotkey .switch")];
+  const keyButtons = [...document.querySelectorAll(".keys")];
+  const mainParts = [
+    document.querySelector(".head"),
+    stage,
+    document.querySelector(".controls")
+  ];
+
+  let connection = "online";
+  let reconnectTimer = 0;
+  let capturing = null;
+
+  const presets = {
+    office: { brightness: 100, temp: 6000 },
+    focus: { brightness: 80, temp: 5000 },
+    read: { brightness: 100, temp: 4000 },
+    relax: { brightness: 30, temp: 2700 }
+  };
+
+  const tempStops = [
+    [2700, [255, 154, 74]],
+    [3200, [255, 181, 116]],
+    [4000, [255, 215, 171]],
+    [5000, [248, 240, 230]],
+    [6500, [220, 235, 255]]
+  ];
+
+  function isOn() {
+    return root.dataset.power === "on";
+  }
+
+  function updateStageLabel() {
+    if (connection === "online") {
+      stage.setAttribute("aria-label", isOn() ? "关闭挂灯" : "打开挂灯");
+    } else if (connection === "connecting") {
+      stage.setAttribute("aria-label", "正在重新连接");
+    } else {
+      stage.setAttribute("aria-label", "设备离线，点击重新连接");
+    }
+  }
+
+  function setPower(on) {
+    root.dataset.power = on ? "on" : "off";
+    stage.setAttribute("aria-pressed", String(on));
+    updateStageLabel();
+  }
+
+  function tempColor(kelvin) {
+    for (let i = 1; i < tempStops.length; i += 1) {
+      const [k1, c1] = tempStops[i - 1];
+      const [k2, c2] = tempStops[i];
+      if (kelvin <= k2) {
+        const t = (kelvin - k1) / (k2 - k1);
+        return c1.map((v, index) => Math.round(v + (c2[index] - v) * t));
+      }
+    }
+    return tempStops[tempStops.length - 1][1];
+  }
+
+  function applyTemp() {
+    const kelvin = Number(temp.value);
+    const rgb = tempColor(kelvin);
+    root.style.setProperty("--lamp", `rgb(${rgb.join(" ")})`);
+    root.style.setProperty("--lamp-rgb", rgb.join(" "));
+    tempVal.textContent = String(kelvin);
+    temp.setAttribute("aria-valuetext", `色温 ${kelvin} K`);
+  }
+
+  function applyBrightness() {
+    const value = Number(brightness.value);
+    brightness.style.setProperty("--pct", `${value}%`);
+    root.style.setProperty("--level", String(value / 100));
+    brightnessVal.textContent = String(value);
+    brightness.setAttribute("aria-valuetext", `亮度 ${value}%`);
+  }
+
+  function markMode(mode) {
+    modeButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.mode === mode);
+      button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+    });
+    modeState.classList.toggle("is-visible", mode === "custom");
+    modeState.textContent = mode === "custom" ? "自定义" : "";
+
+    const slot = modeButtons.findIndex((button) => button.dataset.mode === mode);
+    segmented.classList.toggle("has-thumb", slot >= 0);
+    if (slot >= 0) segmented.style.setProperty("--slot", String(slot));
+  }
+
+  function wake() {
+    if (!isOn()) setPower(true);
+  }
+
+  function setConn(next) {
+    connection = next;
+    root.dataset.conn = next;
+    window.clearTimeout(reconnectTimer);
+    reconnectBtn.classList.toggle("is-spinning", next === "connecting");
+
+    if (next === "online") {
+      statusText.textContent = "局域网直连";
+      connText.textContent = "192.168.137.24 · 12 ms";
+    } else if (next === "connecting") {
+      statusText.textContent = "正在重连…";
+      connText.textContent = "正在重连";
+      pillText.textContent = "正在重新连接…";
+    } else {
+      statusText.textContent = "设备离线";
+      connText.textContent = "未连接";
+      pillText.textContent = "设备离线 · 点按重连";
+    }
+
+    updateStageLabel();
+  }
+
+  function reconnect() {
+    if (connection === "online") return;
+    setConn("connecting");
+    reconnectTimer = window.setTimeout(() => setConn("online"), 1900);
+  }
+
+  stage.addEventListener("click", () => {
+    if (connection !== "online") {
+      reconnect();
+      return;
+    }
+    setPower(!isOn());
+  });
+
+  reconnectBtn.addEventListener("click", reconnect);
+
+  function setView(view) {
+    const open = view === "settings";
+    app.dataset.view = open ? "settings" : "main";
+    mainParts.forEach((part) => { part.inert = open; });
+    settingsView.inert = !open;
+    settingsView.setAttribute("aria-hidden", String(!open));
+  }
+
+  settingsBtn.addEventListener("click", () => setView("settings"));
+  backBtn.addEventListener("click", () => setView("main"));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && app.dataset.view === "settings" && !capturing) {
+      setView("main");
+    }
+  });
+
+  document.querySelectorAll(".switch").forEach((button) => {
+    if (button === hotkeyMaster) return;
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      const next = button.getAttribute("aria-checked") !== "true";
+      button.setAttribute("aria-checked", String(next));
+    });
+  });
+
+  function setHotkeysEnabled(enabled) {
+    if (!enabled) stopCapture(true);
+    hotkeyMaster.setAttribute("aria-checked", String(enabled));
+    hotkeyGroup.classList.toggle("hotkeys-locked", !enabled);
+    hotkeyRowSwitches.forEach((button) => {
+      button.disabled = !enabled;
+      button.setAttribute("aria-disabled", String(!enabled));
+    });
+  }
+
+  hotkeyMaster.addEventListener("click", () => {
+    setHotkeysEnabled(hotkeyMaster.getAttribute("aria-checked") !== "true");
+  });
+
+  const keyLabels = {
+    ArrowUp: "↑",
+    ArrowDown: "↓",
+    ArrowLeft: "←",
+    ArrowRight: "→",
+    " ": "Space"
+  };
+
+  function renderKeys(button, labels) {
+    button.replaceChildren(...labels.map((label) => {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = label;
+      return kbd;
+    }));
+  }
+
+  function stopCapture(restore) {
+    if (!capturing) return;
+    const { button, labels } = capturing;
+    button.classList.remove("is-capturing");
+    button.setAttribute("aria-label", "点击修改快捷键");
+    if (restore) renderKeys(button, labels);
+    capturing = null;
+    window.removeEventListener("keydown", onCaptureKey, true);
+  }
+
+  function onCaptureKey(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      stopCapture(true);
+      return;
+    }
+    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
+    const modifiers = [];
+    if (event.ctrlKey) modifiers.push("Ctrl");
+    if (event.altKey) modifiers.push("Alt");
+    if (event.shiftKey) modifiers.push("Shift");
+    if (event.metaKey) modifiers.push("Win");
+    if (!modifiers.length) return;
+    const key = event.key.length === 1 ? event.key.toUpperCase() : (keyLabels[event.key] || event.key);
+    const labels = [...modifiers, key];
+    const { button } = capturing;
+    capturing = null;
+    window.removeEventListener("keydown", onCaptureKey, true);
+    button.classList.remove("is-capturing");
+    renderKeys(button, labels);
+    button.setAttribute("aria-label", `快捷键 ${labels.join(" ")}，点击修改`);
+  }
+
+  keyButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.closest(".hotkeys-locked")) return;
+      if (capturing) stopCapture(true);
+      const labels = [...button.querySelectorAll("kbd")].map((kbd) => kbd.textContent);
+      button.classList.add("is-capturing");
+      button.setAttribute("aria-label", "按下新的快捷键组合，Esc 取消");
+      capturing = { button, labels };
+      window.addEventListener("keydown", onCaptureKey, true);
+    });
+  });
+
+  brightness.addEventListener("input", () => {
+    wake();
+    applyBrightness();
+    markMode("custom");
+  });
+
+  temp.addEventListener("input", () => {
+    wake();
+    applyTemp();
+    markMode("custom");
+  });
+
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const preset = presets[button.dataset.mode];
+      wake();
+      brightness.value = String(preset.brightness);
+      temp.value = String(preset.temp);
+      applyBrightness();
+      applyTemp();
+      markMode(button.dataset.mode);
+    });
+  });
+
+  autoFill.addEventListener("click", () => {
+    const next = autoFill.getAttribute("aria-checked") !== "true";
+    autoFill.setAttribute("aria-checked", String(next));
+  });
+
+  applyBrightness();
+  applyTemp();
+  markMode("custom");
+  setHotkeysEnabled(false);
+  setConn("online");
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("conn") === "offline" || params.get("conn") === "connecting") {
+    setConn(params.get("conn"));
+  }
+  if (params.get("view") === "settings") setView("settings");
+  if (params.get("hotkeys") === "on") setHotkeysEnabled(true);
+</script>
+</body>
+</html>

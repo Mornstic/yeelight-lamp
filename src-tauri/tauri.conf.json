@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Yeelight 屏幕挂灯",
+  "mainBinaryName": "yeelight-lamp",
+  "version": "0.1.0",
+  "identifier": "com.bennie.yeelight-lamp",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "panel",
+        "title": "Yeelight 屏幕挂灯",
+        "width": 380,
+        "height": 578,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "focus": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "publisher": "Bennie Zhong",
+    "category": "Utility",
+    "shortDescription": "Yeelight 屏幕挂灯本地控制",
+    "longDescription": "局域网直连 Yeelight 智能屏幕挂灯 2 的 Windows 托盘应用，支持无级调光、色温、预设与自动补光，不经过云端。",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "icons/installer-header.bmp",
+        "sidebarImage": "icons/installer-sidebar.bmp"
+      }
+    }
+  }
+}
