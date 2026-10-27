@@ -1,0 +1,99 @@
+name: Bug 报告
+description: 报告可复现的故障或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先阅读 README 的「常见问题」，并确认内容中不含设备 token、`config.json`、`session.json` 或未打码的凭据。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 实际发生了什么？越具体越好。
+      placeholder: 例如：托盘图标显示离线，但同一网络下手机 App 仍能控制挂灯。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 观察到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 程序版本
+      description: 安装包文件名或设置页显示的版本
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: 安装方式
+      options:
+        - NSIS 安装包
+        - 免安装 ZIP
+        - 从源码构建
+    validations:
+      required: true
+
+  - type: input
+    id: network
+    attributes:
+      label: 网络环境
+      description: 移动热点或路由器、频段，以及灯与电脑是否在同一网段
+      placeholder: Windows 移动热点 2.4GHz；灯 192.168.137.x
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号 / 固件
+      description: 当前正式支持 yeelink.light.lamp43；其它型号请注明
+      placeholder: yeelink.light.lamp43
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或日志
+      description: 截图请先打码 token、IP 和账号信息。
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索已有 Issue 和 README 常见问题
+          required: true
+        - label: 我确认内容中不含设备 token、账号凭据或未打码的会话信息
+          required: true

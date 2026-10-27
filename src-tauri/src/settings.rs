@@ -140,8 +140,10 @@ mod tests {
 
     #[test]
     fn hotkey_roundtrips_through_json() {
-        let mut settings = Settings::default();
-        settings.hotkeys_enabled = true;
+        let mut settings = Settings {
+            hotkeys_enabled: true,
+            ..Settings::default()
+        };
         settings.hotkeys.toggle = Hotkey {
             enabled: false,
             ctrl: true,

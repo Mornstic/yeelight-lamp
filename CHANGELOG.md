@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### 文档与项目
+
+- 添加 MIT 许可证、贡献指南、行为准则与安全策略
+- 添加 Bug / 功能建议模板、PR 模板与 CODEOWNERS
+- 添加 Windows CI：格式、Clippy 与单元测试
+- README 补齐快速导航、使用说明、校验和、贡献与许可信息
+
 ## [0.1.0] - 2026-10-28
 
 首个公开版本。

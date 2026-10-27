@@ -71,7 +71,10 @@ pub fn sync(app: &AppHandle, settings: &Settings) -> Vec<String> {
     let rows = [
         (HotkeyAction::Toggle, &settings.hotkeys.toggle),
         (HotkeyAction::BrightnessUp, &settings.hotkeys.brightness_up),
-        (HotkeyAction::BrightnessDown, &settings.hotkeys.brightness_down),
+        (
+            HotkeyAction::BrightnessDown,
+            &settings.hotkeys.brightness_down,
+        ),
     ];
     let mut failures = Vec::new();
     for (action, hotkey) in rows {
@@ -104,12 +107,13 @@ pub fn sync(app: &AppHandle, settings: &Settings) -> Vec<String> {
                     .lock()
                     .unwrap()
                     .insert(shortcut.id(), action);
-                log::info!("已注册快捷键 {} → {}", display_chord(hotkey), action_label(action));
+                log::info!(
+                    "已注册快捷键 {} → {}",
+                    display_chord(hotkey),
+                    action_label(action)
+                );
             }
-            Err(_) => failures.push(format!(
-                "{} 可能已被其他程序占用",
-                display_chord(hotkey)
-            )),
+            Err(_) => failures.push(format!("{} 可能已被其他程序占用", display_chord(hotkey))),
         }
     }
     for failure in &failures {

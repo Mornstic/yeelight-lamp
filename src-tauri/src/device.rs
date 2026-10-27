@@ -123,10 +123,7 @@ impl Lamp {
     }
 
     pub fn ip(&self) -> Option<Ipv4Addr> {
-        self.client
-            .as_ref()
-            .map(MiioClient::ip)
-            .or(self.config.ip)
+        self.client.as_ref().map(MiioClient::ip).or(self.config.ip)
     }
 
     /// 找到一个能握手、且设备 ID 对得上的 IP，并建立会话。
@@ -234,7 +231,11 @@ impl Lamp {
     }
 
     /// 把亮度/色温调到目标值；灯是关的就先开灯，否则写入会被固件丢弃。
-    pub async fn apply_lighting(&mut self, brightness: u8, color_temp: u16) -> Result<(), LampError> {
+    pub async fn apply_lighting(
+        &mut self,
+        brightness: u8,
+        color_temp: u16,
+    ) -> Result<(), LampError> {
         let current = self.status().await?;
         if !current.power {
             self.set_power(true).await?;

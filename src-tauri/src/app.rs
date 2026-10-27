@@ -202,8 +202,8 @@ pub fn run() {
             update_tray(app.handle(), &initial);
 
             let launch_by_autostart = std::env::args().any(|arg| arg == "--autostart");
-            let force_show = cfg!(debug_assertions)
-                || std::env::var_os("YEELIGHT_LAMP_KEEP_OPEN").is_some();
+            let force_show =
+                cfg!(debug_assertions) || std::env::var_os("YEELIGHT_LAMP_KEEP_OPEN").is_some();
             if force_show || !launch_by_autostart || show_on_launch {
                 crate::window::show(&window);
             }
@@ -385,9 +385,7 @@ pub(crate) async fn apply_request(
     request: Request,
 ) -> Result<Snapshot, String> {
     let mut guard = state.lock().await;
-    let AppState {
-        lamp, snapshot, ..
-    } = &mut *guard;
+    let AppState { lamp, snapshot, .. } = &mut *guard;
     let Some(lamp) = lamp.as_mut() else {
         return Err("尚未配置设备，请先运行 tools/py/get_token.py".into());
     };
@@ -432,7 +430,11 @@ pub(crate) async fn apply_request(
 
     // 补光开启后由灯自己决定亮度和色温，写入完成后再读一次真实状态
     let adapted = matches!(request, Request::SetAutoFill(true)) && outcome.is_ok();
-    let refreshed = if adapted { lamp.status().await.ok() } else { None };
+    let refreshed = if adapted {
+        lamp.status().await.ok()
+    } else {
+        None
+    };
 
     let latency = started.elapsed().as_millis() as u32;
 
@@ -542,7 +544,9 @@ fn update_tray(app: &AppHandle, snapshot: &Snapshot) {
         _ => "Yeelight 屏幕挂灯 · 设备离线".to_owned(),
     };
     let _ = handles.tray.set_tooltip(Some(&tooltip));
-    let _ = handles.power.set_text(if snapshot.power { "关灯" } else { "开灯" });
+    let _ = handles
+        .power
+        .set_text(if snapshot.power { "关灯" } else { "开灯" });
     let _ = handles.autofill.set_checked(snapshot.auto_fill);
 }
 
@@ -605,10 +609,7 @@ async fn set_auto_fill(
 }
 
 #[tauri::command]
-async fn reconnect_lamp(
-    app: AppHandle,
-    state: State<'_, SharedState>,
-) -> Result<Snapshot, String> {
+async fn reconnect_lamp(app: AppHandle, state: State<'_, SharedState>) -> Result<Snapshot, String> {
     apply_request(&app, state.inner(), Request::Reconnect).await
 }
 

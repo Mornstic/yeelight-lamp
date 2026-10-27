@@ -3,6 +3,10 @@ name = "yeelight-lamp"
 version = "0.1.0"
 edition = "2021"
 default-run = "yeelight-lamp"
+description = "Windows tray controller for Yeelight screen light bars over LAN miIO"
+authors = ["Mornstic"]
+license = "MIT"
+repository = "https://github.com/Mornstic/yeelight-lamp"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

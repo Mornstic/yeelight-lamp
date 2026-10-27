@@ -18,7 +18,6 @@ use serde_json::json;
 use yeelight_lamp::device::{preset_by_id, Lamp, Status, PRESETS};
 use yeelight_lamp::miio;
 
-
 #[tokio::main]
 async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,10 +50,20 @@ fn info() -> Result<(), String> {
     println!("型号      {}", config.model);
     println!("设备 ID   {}", config.did);
     println!("MAC       {}", config.mac.as_deref().unwrap_or("未记录"));
-    println!("IP        {}", config.ip.map_or("未记录".into(), |ip| ip.to_string()));
+    println!(
+        "IP        {}",
+        config.ip.map_or("未记录".into(), |ip| ip.to_string())
+    );
     println!("配置      {}", config.path().display());
     println!("token     已读取（长度 32，不在终端输出）");
-    println!("预设      {}", PRESETS.iter().map(|p| p.label).collect::<Vec<_>>().join(" / "));
+    println!(
+        "预设      {}",
+        PRESETS
+            .iter()
+            .map(|p| p.label)
+            .collect::<Vec<_>>()
+            .join(" / ")
+    );
     Ok(())
 }
 
@@ -76,7 +85,10 @@ async fn scan() -> Result<(), String> {
 
 async fn watch(seconds: Option<u64>) -> Result<(), String> {
     let mut lamp = Lamp::load().map_err(|err| err.to_string())?;
-    println!("IP  {}", lamp.connect().await.map_err(|err| err.to_string())?);
+    println!(
+        "IP  {}",
+        lamp.connect().await.map_err(|err| err.to_string())?
+    );
     for _ in 0..seconds.unwrap_or(10) {
         match lamp.status_with_latency().await {
             Ok((status, latency)) => println!("{}  {} ms", format_status(status), latency),
@@ -105,18 +117,24 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
             } else {
                 command == "on"
             };
-            lamp.set_power(target).await.map_err(|err| err.to_string())?;
+            lamp.set_power(target)
+                .await
+                .map_err(|err| err.to_string())?;
             println!("{}", if target { "已开灯" } else { "已关灯" });
         }
         "bright" | "brightness" => {
-            let value: u8 = parse_arg(rest, command)?.parse().map_err(|_| "亮度需要 1-100 的整数")?;
+            let value: u8 = parse_arg(rest, command)?
+                .parse()
+                .map_err(|_| "亮度需要 1-100 的整数")?;
             lamp.set_brightness(value)
                 .await
                 .map_err(|err| err.to_string())?;
             println!("亮度 → {}", value.clamp(1, 100));
         }
         "temp" | "color-temp" => {
-            let value: u16 = parse_arg(rest, command)?.parse().map_err(|_| "色温需要 2700-6500 的整数")?;
+            let value: u16 = parse_arg(rest, command)?
+                .parse()
+                .map_err(|_| "色温需要 2700-6500 的整数")?;
             lamp.set_color_temp(value)
                 .await
                 .map_err(|err| err.to_string())?;
@@ -126,7 +144,9 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
             let name = parse_arg(rest, command)?;
             let preset = preset_by_id(name)
                 .ok_or_else(|| format!("未知预设 {name}，可选：office/focus/read/relax"))?;
-            lamp.apply_preset(preset).await.map_err(|err| err.to_string())?;
+            lamp.apply_preset(preset)
+                .await
+                .map_err(|err| err.to_string())?;
             println!(
                 "预设 → {}（{}% / {}K）",
                 preset.label, preset.brightness, preset.color_temp
@@ -134,7 +154,9 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
         }
         "autofill" => {
             let on = parse_arg(rest, command)? == "on";
-            lamp.set_auto_fill(on).await.map_err(|err| err.to_string())?;
+            lamp.set_auto_fill(on)
+                .await
+                .map_err(|err| err.to_string())?;
             println!("自动补光 → {}", if on { "开" } else { "关" });
         }
         "light" => {
@@ -166,7 +188,10 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
                 .map(|text| serde_json::from_str(text).map_err(|_| "参数需要是 JSON"))
                 .transpose()?
                 .unwrap_or_else(|| json!([]));
-            let value = lamp.raw_command(method, params).await.map_err(|err| err.to_string())?;
+            let value = lamp
+                .raw_command(method, params)
+                .await
+                .map_err(|err| err.to_string())?;
             println!("{value:#}");
         }
         other => {
@@ -191,7 +216,11 @@ fn format_status(status: Status) -> String {
         status.brightness,
         status.color_temp,
         status.mode,
-        if status.auto_fill { "  自动补光 开" } else { "" }
+        if status.auto_fill {
+            "  自动补光 开"
+        } else {
+            ""
+        }
     )
 }
 
