@@ -30,6 +30,8 @@
   &nbsp;·&nbsp;
   <a href="#常见问题">常见问题</a>
   &nbsp;·&nbsp;
+  <a href="docs/architecture.md">架构详解</a>
+  &nbsp;·&nbsp;
   <a href="docs/protocol.md">miIO 笔记</a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">更新记录</a>
@@ -237,7 +239,7 @@ yeelight-lamp/
 │  ├─ gen_installer_art.py    安装器页眉与侧栏
 │  ├─ gen_social_preview.py   GitHub 社交预览图
 │  └─ package_release.ps1     发布资产打包与校验
-├─ docs/                      协议笔记、截图、发布说明
+├─ docs/                      协议笔记、架构说明、截图、发布说明
 ├─ design/                    视觉稿（内部参考）
 ├─ CHANGELOG.md
 ├─ CONTRIBUTING.md
@@ -259,7 +261,8 @@ yeelight-lamp/
 | `ui/index.html` | 玻璃面板、设置页、快捷键录制与防抖写入 |
 | `bin/lampctl.rs` | 终端调试工具：状态、开关、亮度、色温与原始命令 |
 
-设备协议、实测行为与 token 获取方式见 [`docs/protocol.md`](docs/protocol.md)。
+设备协议、实测行为与 token 获取方式见 [`docs/protocol.md`](docs/protocol.md)；
+完整的分层架构、一次点击的调用链与设计取舍见 [`docs/architecture.md`](docs/architecture.md)。
 
 ## 开发
 
