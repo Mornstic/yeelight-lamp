@@ -1,11 +1,14 @@
 param(
-  [string]$Version = "0.1.0",
+  [string]$Version = "",
   [string]$Arch = "x64"
 )
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $root = Split-Path -Parent $PSScriptRoot
+if (-not $Version) {
+  $Version = (Get-Content (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version
+}
 $bundleDir = Join-Path $root "src-tauri\target\release\bundle\nsis"
 $releaseDir = Join-Path $root "src-tauri\target\release\release-assets"
 $exe = Join-Path $root "src-tauri\target\release\yeelight-lamp.exe"

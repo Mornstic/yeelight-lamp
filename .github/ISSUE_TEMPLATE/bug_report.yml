@@ -40,7 +40,7 @@ body:
     attributes:
       label: 程序版本
       description: 安装包文件名或设置页显示的版本
-      placeholder: v0.1.0
+      placeholder: v0.1.1
     validations:
       required: true
 
