@@ -225,10 +225,12 @@ def app_icon(px: int = 1024) -> Image.Image:
 
 
 def tray_icon(mode: str, px: int = 32, light: bool = False) -> Image.Image:
-    """Bold, low-detail glyph that survives a 16 px tray.
+    """A slim screen bar clipped above a monitor, authored for a 16 px tray.
 
-    The bar and its light beam are the whole story: warm = lit, neutral = off,
-    coral dot = unreachable. Light taskbars get deep ink instead of pale ink.
+    The tube floats just clear of the top bezel with a central clip so it reads
+    as a separate product, not a lid. The solid frame keeps the silhouette
+    legible after downsampling; warm glass means lit, a grey tube means off,
+    and a coral dot means unreachable.
     """
     ss = 16
     n = px * ss * 2
@@ -237,36 +239,74 @@ def tray_icon(mode: str, px: int = 32, light: bool = False) -> Image.Image:
 
     on = mode == "on"
     offline = mode == "offline"
-    bar_box = (8 * k, 16 * k, 56 * k, 28 * k)
-    bar = mask(n, bar_box, 6 * k)
 
-    if on:
-        beam = polygon_mask(n, [(14 * k, 30 * k), (50 * k, 30 * k), (59 * k, 51 * k), (5 * k, 51 * k)])
-        if light:
-            fade = gradient(n, [(0.469, (214, 132, 58, 96)), (0.640, (214, 132, 58, 42)), (0.797, (214, 132, 58, 0))])
-            bar_hi, bar_lo = (242, 176, 106, 255), (201, 122, 44, 255)
-        else:
-            fade = gradient(n, [(0.469, (255, 200, 146, 168)), (0.640, (255, 194, 136, 74)), (0.797, (255, 188, 126, 0))])
-            img = paint(img, warm_glow(n, (10 * k, 10 * k, 54 * k, 36 * k), 8 * k, 5 * k, (255, 190, 128, 130)))
-            bar_hi, bar_lo = (255, 246, 228, 255), (255, 194, 138, 255)
-        img = paint(img, clipped(fade, blur(beam, 3.2 * k)))
-    elif offline:
-        if light:
-            bar_hi, bar_lo = (134, 140, 150, 255), (118, 124, 134, 255)
-        else:
-            bar_hi, bar_lo = (142, 147, 156, 255), (128, 133, 142, 255)
+    if light:
+        ink = (34, 39, 47, 255)
+        bar_hi, bar_mid, bar_lo = (255, 249, 238, 255), (255, 214, 168, 255), (226, 149, 66, 255)
+        bar_off_hi, bar_off_lo = (138, 144, 154, 255), (102, 108, 118, 255)
+        wash = (255, 184, 120, 150)
     else:
-        if light:
-            bar_hi, bar_lo = (88, 94, 104, 255), (70, 76, 86, 255)
-        else:
-            bar_hi, bar_lo = (200, 204, 212, 255), (176, 181, 190, 255)
-
-    img = paint(img, clipped(gradient(n, [(0.250, bar_hi), (0.4375, bar_lo)]), bar))
+        ink = (247, 249, 253, 255)
+        bar_hi, bar_mid, bar_lo = (255, 252, 244, 255), (255, 222, 180, 255), (255, 184, 118, 255)
+        bar_off_hi, bar_off_lo = (178, 184, 194, 250), (134, 140, 150, 250)
+        wash = (255, 194, 140, 150)
 
     if offline:
-        # A status dot reads better than a slash at 16 px.
+        ink = ink[:3] + (146,)
+        bar_off_hi = bar_off_hi[:3] + (168,)
+        bar_off_lo = bar_off_lo[:3] + (168,)
+
+    outer = (10 * k, 17 * k, 54 * k, 45 * k)
+    inner = (15 * k, 21 * k, 49 * k, 41 * k)
+    frame = ImageChops.subtract(mask(n, outer, 6 * k), mask(n, inner, 3 * k))
+    screen = mask(n, inner, 3 * k)
+    bar = mask(n, (12 * k, 8.5 * k, 52 * k, 14.5 * k), 3 * k)
+
+    if on:
+        # Tight halo so the tube reads as lit without fuzzing the 16 px mark.
+        img = paint(img, warm_glow(n, (16 * k, 9 * k, 48 * k, 18.5 * k), 2 * k, 3.2 * k, (255, 190, 128, 62)))
+        light_wash = gradient(
+            n,
+            [(21 / 64, wash), (28 / 64, wash[:3] + (48,)), (35 / 64, wash[:3] + (0,))],
+        )
+        img = paint(img, clipped(light_wash, screen))
+
+    img = paint(img, clipped(Image.new("RGBA", (n, n), ink), frame))
+    stand = union(
+        mask(n, (29 * k, 43 * k, 35 * k, 53.5 * k), 3 * k),
+        mask(n, (22 * k, 53.5 * k, 42 * k, 57.5 * k), 2 * k),
+    )
+    img = paint(img, clipped(Image.new("RGBA", (n, n), ink), stand))
+    clip = mask(n, (28 * k, 13.5 * k, 36 * k, 18 * k), 1.5 * k)
+    img = paint(img, clipped(Image.new("RGBA", (n, n), ink), clip))
+
+    if on:
+        # Warm spill from the tube catches the top bezel.
+        spill = gradient(n, [(17 / 64, (255, 198, 146, 92)), (21 / 64, (255, 198, 146, 0))])
+        img = paint(img, clipped(spill, frame))
+
+    bar_fill = (
+        gradient(n, [(8.5 / 64, bar_hi), (11.2 / 64, bar_mid), (14.5 / 64, bar_lo)])
+        if on
+        else gradient(n, [(8.5 / 64, bar_off_hi), (14.5 / 64, bar_off_lo)])
+    )
+    img = paint(img, clipped(bar_fill, bar))
+
+    # Tube material: a thin specular top and a dark contact seam keep it from
+    # flattening into a lid at 16 px.
+    spec = mask(n, (14.5 * k, 9.3 * k, 49.5 * k, 10.8 * k), 0.75 * k)
+    img = paint(img, clipped(tint(spec, (255, 255, 255, 132 if on else 76)), bar))
+    seam = mask(n, (13.5 * k, 13.8 * k, 50.5 * k, 14.5 * k), 0.35 * k)
+    img = paint(img, clipped(tint(seam, (83, 44, 16, 58) if on else (30, 30, 36, 48)), bar))
+
+    if offline:
+        # Knock a transparent ring out of the artwork so the dot reads on any
+        # taskbar colour, then lay the badge in the bite.
+        cut = Image.new("L", (n, n), 0)
+        ImageDraw.Draw(cut).ellipse((43.5 * k, 37.5 * k, 58.5 * k, 52.5 * k), fill=255)
+        img.paste((0, 0, 0, 0), mask=cut)
         badge = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-        ImageDraw.Draw(badge).ellipse((43 * k, 41 * k, 59 * k, 57 * k), fill=(214, 96, 70, 255))
+        ImageDraw.Draw(badge).ellipse((45.5 * k, 39.5 * k, 56.5 * k, 50.5 * k), fill=(216, 94, 68, 255))
         img = paint(img, badge)
 
     return img.resize((px, px), Image.LANCZOS)
