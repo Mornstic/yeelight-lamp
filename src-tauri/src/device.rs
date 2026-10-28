@@ -5,6 +5,8 @@
 //! 所以调用方要先开灯再改值。
 
 use std::net::Ipv4Addr;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -29,6 +31,9 @@ pub const COLOR_TEMP_MAX: u16 = 6500;
 
 const CONNECT_WAIT: Duration = Duration::from_millis(900);
 const CALL_WAIT: Duration = Duration::from_millis(1600);
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Preset {
@@ -319,7 +324,14 @@ async fn hello_matches(ip: Ipv4Addr, did: u64) -> bool {
 /// 但 MAC 和 IP 都是 ASCII，按行做字节级匹配即可。
 fn arp_lookup(mac: &str) -> Option<Ipv4Addr> {
     let wanted = mac.to_ascii_lowercase().replace(':', "-");
-    let output = Command::new("arp").arg("-a").output().ok()?;
+    let mut command = Command::new("arp");
+    command.arg("-a");
+    // GUI 进程没有控制台；不隐藏会每轮重连都闪出一个 arp.exe 窗口。
+    #[cfg(windows)]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = command.output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
 
     text.lines()
