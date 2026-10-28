@@ -64,7 +64,17 @@
       inset 0 -20px 40px rgb(0 0 0 / .12);
     overflow: hidden;
     isolation: isolate;
-    animation: panel-in .3s cubic-bezier(.2, .8, .2, 1) both;
+  }
+
+  .app.is-entering {
+    animation: panel-in .32s cubic-bezier(.16, 1, .3, 1) both;
+    will-change: opacity, transform, filter;
+  }
+
+  .app.is-leaving {
+    animation: panel-out .18s cubic-bezier(.4, 0, .9, 1) both;
+    pointer-events: none;
+    will-change: opacity, transform, filter;
   }
 
   .app::before {
@@ -122,8 +132,13 @@
   }
 
   @keyframes panel-in {
-    from { opacity: 0; transform: translateY(8px) scale(.986); filter: blur(6px); }
+    from { opacity: 0; transform: translateY(10px) scale(.982); filter: blur(8px); }
     to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+
+  @keyframes panel-out {
+    from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    to { opacity: 0; transform: translateY(6px) scale(.986); filter: blur(3px); }
   }
 
   .head {
@@ -1242,7 +1257,7 @@
 </style>
 </head>
 <body>
-  <main class="app" data-view="main">
+  <main class="app is-entering" data-view="main">
     <header class="head">
       <div class="identity">
         <h1>Yeelight 屏幕挂灯</h1>
@@ -1429,6 +1444,43 @@
 
   const root = document.documentElement;
   const app = document.querySelector(".app");
+  let hideToken = 0;
+
+  function animateIn() {
+    hideToken += 1;
+    app.classList.remove("is-leaving");
+    app.classList.remove("is-entering");
+    void app.offsetWidth;
+    app.classList.add("is-entering");
+  }
+
+  function animateOut() {
+    if (app.classList.contains("is-leaving")) return;
+    const token = ++hideToken;
+    app.classList.remove("is-entering");
+    void app.offsetWidth;
+    app.classList.add("is-leaving");
+
+    let finished = false;
+    const finish = () => {
+      if (finished || token !== hideToken) return;
+      finished = true;
+      invoke("hide_panel");
+    };
+
+    app.addEventListener("animationend", function onEnd(event) {
+      if (event.target !== app || event.animationName !== "panel-out") return;
+      app.removeEventListener("animationend", onEnd);
+      finish();
+    });
+    window.setTimeout(finish, 280);
+  }
+
+  app.addEventListener("animationend", (event) => {
+    if (event.target === app && event.animationName === "panel-in") {
+      app.classList.remove("is-entering");
+    }
+  });
   const stage = document.getElementById("stage");
   const brightness = document.getElementById("brightness");
   const temp = document.getElementById("temp");
@@ -1693,7 +1745,7 @@
       setView("main");
       return;
     }
-    invoke("hide_panel");
+    invoke("close_panel");
   });
 
   brightness.addEventListener("input", () => {
@@ -1893,6 +1945,8 @@
   updateConnection();
 
   listen("lamp-state", (event) => render(event.payload));
+  listen("panel-show", animateIn);
+  listen("panel-hide", animateOut);
   invoke("lamp_snapshot").then(render).catch((error) => console.error("lamp_snapshot", error));
   invoke("get_settings").then(applySettings).catch((error) => console.error("get_settings", error));
 </script>

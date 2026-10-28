@@ -189,6 +189,7 @@ pub fn run() {
             set_mode,
             set_auto_fill,
             reconnect_lamp,
+            close_panel,
             hide_panel,
             get_settings,
             save_settings,
@@ -227,12 +228,16 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             WindowEvent::Focused(false) => {
                 if std::env::var_os("YEELIGHT_LAMP_KEEP_OPEN").is_none() {
-                    let _ = window.hide();
+                    if let Some(panel) = window.app_handle().get_webview_window("panel") {
+                        crate::window::close(&panel);
+                    }
                 }
             }
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                let _ = window.hide();
+                if let Some(panel) = window.app_handle().get_webview_window("panel") {
+                    crate::window::close(&panel);
+                }
             }
             WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(panel) = window.app_handle().get_webview_window("panel") {
@@ -614,9 +619,16 @@ async fn reconnect_lamp(app: AppHandle, state: State<'_, SharedState>) -> Result
 }
 
 #[tauri::command]
+fn close_panel(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("panel") {
+        crate::window::close(&window);
+    }
+}
+
+#[tauri::command]
 fn hide_panel(app: AppHandle) {
     if let Some(window) = app.get_webview_window("panel") {
-        let _ = window.hide();
+        crate::window::finish_hide(&window);
     }
 }
 
