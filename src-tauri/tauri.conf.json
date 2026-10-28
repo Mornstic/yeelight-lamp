@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Yeelight 屏幕挂灯",
   "mainBinaryName": "yeelight-lamp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.bennie.yeelight-lamp",
   "build": {
     "frontendDist": "../ui"

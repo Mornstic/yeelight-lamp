@@ -1,6 +1,6 @@
 [package]
 name = "yeelight-lamp"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 default-run = "yeelight-lamp"
 description = "Windows tray controller for Yeelight screen light bars over LAN miIO"

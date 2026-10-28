@@ -121,14 +121,14 @@
 
 | 文件 | 说明 |
 |---|---|
-| `yeelight-lamp_0.1.1_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
-| `yeelight-lamp_0.1.1_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
+| `yeelight-lamp_0.1.2_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
+| `yeelight-lamp_0.1.2_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
 | `SHA256SUMS.txt` | 安装包与便携包的 SHA-256 校验和 |
 
 下载后可在 PowerShell 中校验：
 
 ```powershell
-Get-FileHash .\yeelight-lamp_0.1.1_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\yeelight-lamp_0.1.2_x64-setup.exe -Algorithm SHA256
 ```
 
 > [!WARNING]
@@ -149,7 +149,7 @@ npm run tauri build
 
 产物：
 
-- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.1.1_x64-setup.exe`
+- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.1.2_x64-setup.exe`
 - 可执行文件 `src-tauri/target/release/yeelight-lamp.exe`
 
 生成发布资产（ASCII 命名的安装包、免安装 ZIP 与校验和）：
@@ -296,7 +296,7 @@ GitHub Actions 在 Windows runner 上执行同样的格式、Clippy 和测试检
 
 ## 版本
 
-当前版本 **v0.1.1**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前版本 **v0.1.2**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 许可证
 
