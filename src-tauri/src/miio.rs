@@ -99,12 +99,7 @@ fn hex_digit(byte: u8) -> Option<u8> {
 }
 
 fn md5_16(data: &[u8]) -> [u8; 16] {
-    let mut hasher = Md5::new();
-    hasher.update(data);
-    let digest = hasher.finalize();
-    let mut out = [0u8; 16];
-    out.copy_from_slice(&digest);
-    out
+    Md5::digest(data).into()
 }
 
 fn encrypt(plain: &[u8], key: &[u8; 16], iv: &[u8; 16]) -> Result<Vec<u8>, MiioError> {
