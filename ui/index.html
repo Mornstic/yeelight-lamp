@@ -1945,7 +1945,10 @@
   updateConnection();
 
   listen("lamp-state", (event) => render(event.payload));
-  listen("panel-show", animateIn);
+  listen("panel-show", () => {
+    animateIn();
+    invoke("refresh_lamp").then(render).catch((error) => console.error("refresh_lamp", error));
+  });
   listen("panel-hide", animateOut);
   invoke("lamp_snapshot").then(render).catch((error) => console.error("lamp_snapshot", error));
   invoke("get_settings").then(applySettings).catch((error) => console.error("get_settings", error));

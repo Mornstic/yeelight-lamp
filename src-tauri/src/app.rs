@@ -13,8 +13,11 @@ use crate::device::{Lamp, LampError, Status, PRESETS};
 use crate::hotkeys::HotkeyBindings;
 use crate::settings::Settings;
 
-const ONLINE_POLL: Duration = Duration::from_millis(2500);
-const OFFLINE_POLL: Duration = Duration::from_millis(4000);
+const PANEL_POLL: Duration = Duration::from_millis(2500);
+const HIDDEN_POLL: Duration = Duration::from_secs(20);
+const OFFLINE_POLL: Duration = Duration::from_secs(4);
+const OFFLINE_POLL_MAX: Duration = Duration::from_secs(60);
+const RECONNECT_AFTER: u32 = 3;
 
 const TRAY_OFFLINE: &[u8] = include_bytes!("../icons/tray_offline.png");
 const TRAY_OFF: &[u8] = include_bytes!("../icons/tray_off.png");
@@ -330,14 +333,48 @@ fn handle_menu(app: &AppHandle, id: &str) {
 }
 
 async fn poll_loop(app: AppHandle) {
+    let mut failures = 0u32;
     loop {
         let state = app.state::<SharedState>().inner().clone();
-        let online = poll_once(&app, &state).await;
-        tokio::time::sleep(if online { ONLINE_POLL } else { OFFLINE_POLL }).await;
+        let online = poll_once(&app, &state, false).await;
+
+        if online {
+            failures = 0;
+        } else {
+            failures = failures.saturating_add(1);
+            if failures == RECONNECT_AFTER {
+                if let Some(lamp) = state.lock().await.lamp.as_mut() {
+                    lamp.invalidate();
+                }
+            }
+        }
+
+        let delay = next_delay(online, panel_visible(&app), failures);
+        tokio::time::sleep(delay).await;
     }
 }
 
-async fn poll_once(app: &AppHandle, state: &SharedState) -> bool {
+fn panel_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("panel")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false)
+}
+
+fn next_delay(online: bool, visible: bool, failures: u32) -> Duration {
+    if online {
+        return if visible { PANEL_POLL } else { HIDDEN_POLL };
+    }
+    if visible {
+        return OFFLINE_POLL;
+    }
+    if failures <= RECONNECT_AFTER {
+        return OFFLINE_POLL;
+    }
+    let factor = 1u32 << (failures - RECONNECT_AFTER).min(4);
+    (OFFLINE_POLL * factor).min(OFFLINE_POLL_MAX)
+}
+
+async fn poll_once(app: &AppHandle, state: &SharedState, reconnect: bool) -> bool {
     let mut guard = state.lock().await;
 
     if guard.lamp.is_none() {
@@ -363,7 +400,11 @@ async fn poll_once(app: &AppHandle, state: &SharedState) -> bool {
     let Some(lamp) = guard.lamp.as_mut() else {
         return false;
     };
-    let outcome = lamp.status_with_latency().await;
+    let outcome = if reconnect {
+        lamp.status_with_latency().await
+    } else {
+        lamp.status_quiet_with_latency().await
+    };
     let ip = lamp.ip();
 
     match outcome {
@@ -563,7 +604,7 @@ async fn lamp_snapshot(state: State<'_, SharedState>) -> Result<Snapshot, String
 #[tauri::command]
 async fn refresh_lamp(app: AppHandle, state: State<'_, SharedState>) -> Result<Snapshot, String> {
     let shared = state.inner().clone();
-    poll_once(&app, &shared).await;
+    poll_once(&app, &shared, true).await;
     let snapshot = shared.lock().await.snapshot.clone();
     Ok(snapshot)
 }
@@ -680,4 +721,21 @@ fn sync_autostart(app: &AppHandle, settings: &Settings) -> Result<(), String> {
         return Ok(());
     };
     result.map_err(|err| format!("同步开机自启失败：{err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poll_delay_follows_visibility_and_failures() {
+        assert_eq!(next_delay(true, true, 0), PANEL_POLL);
+        assert_eq!(next_delay(true, false, 0), HIDDEN_POLL);
+        assert_eq!(next_delay(false, true, 1), OFFLINE_POLL);
+        assert_eq!(next_delay(false, false, 3), OFFLINE_POLL);
+        assert_eq!(next_delay(false, false, 4), Duration::from_secs(8));
+        assert_eq!(next_delay(false, false, 5), Duration::from_secs(16));
+        assert_eq!(next_delay(false, false, 6), Duration::from_secs(32));
+        assert_eq!(next_delay(false, false, 7), OFFLINE_POLL_MAX);
+    }
 }

@@ -171,6 +171,15 @@ impl Lamp {
     }
 
     pub async fn status(&mut self) -> Result<Status, LampError> {
+        self.read_status(true).await
+    }
+
+    /// 轮询专用：瞬时丢包不丢弃会话，由调用方累计失败次数后再决定重新握手。
+    pub async fn status_quiet(&mut self) -> Result<Status, LampError> {
+        self.read_status(false).await
+    }
+
+    async fn read_status(&mut self, reconnect: bool) -> Result<Status, LampError> {
         let did = self.config.did.to_string();
         let params: Vec<Value> = [
             (SIID_LIGHT, PIID_POWER),
@@ -183,7 +192,12 @@ impl Lamp {
         .map(|(siid, piid)| json!({ "did": did, "siid": siid, "piid": piid }))
         .collect();
 
-        let result = self.call("get_properties", Value::Array(params)).await?;
+        let result = if reconnect {
+            self.call("get_properties", Value::Array(params)).await?
+        } else {
+            self.call_quiet("get_properties", Value::Array(params))
+                .await?
+        };
         let items = result
             .as_array()
             .ok_or_else(|| LampError::Protocol("属性响应不是数组".into()))?;
@@ -269,8 +283,16 @@ impl Lamp {
 
     /// 测量一次状态读取的往返耗时，用于面板上的延迟显示。
     pub async fn status_with_latency(&mut self) -> Result<(Status, u32), LampError> {
+        self.timed_status(true).await
+    }
+
+    pub async fn status_quiet_with_latency(&mut self) -> Result<(Status, u32), LampError> {
+        self.timed_status(false).await
+    }
+
+    async fn timed_status(&mut self, reconnect: bool) -> Result<(Status, u32), LampError> {
         let started = Instant::now();
-        let status = self.status().await?;
+        let status = self.read_status(reconnect).await?;
         Ok((status, started.elapsed().as_millis() as u32))
     }
 
@@ -289,6 +311,15 @@ impl Lamp {
             }
         }
         Err(LampError::Protocol("设备连接反复失败".into()))
+    }
+
+    /// 只发一次、失败不重连：一次 UDP 丢包不应该触发 ARP + 广播的全量发现。
+    async fn call_quiet(&mut self, method: &str, params: Value) -> Result<Value, LampError> {
+        if self.client.is_none() {
+            self.connect().await?;
+        }
+        let client = self.client.as_mut().expect("client 刚刚建立");
+        Ok(client.send(method, params).await?)
     }
 
     async fn set_property(&mut self, siid: u8, piid: u8, value: Value) -> Result<(), LampError> {
