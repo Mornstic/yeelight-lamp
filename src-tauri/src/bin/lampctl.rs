@@ -192,7 +192,7 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
                 .raw_command(method, params)
                 .await
                 .map_err(|err| err.to_string())?;
-            println!("{value:#}");
+            println!("{:#}", redact(value));
         }
         other => {
             print_help();
@@ -201,6 +201,38 @@ async fn run_lamp(command: &str, rest: &[String]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// `raw` 会把设备回包原样打印，miIO.info 里就带 token，打印前遮掉机密字段。
+fn redact(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, value)| {
+                    let name = key.to_ascii_lowercase();
+                    let value = if name.contains("token") || name.contains("security") {
+                        Value::String(mask(value.as_str().unwrap_or_default()))
+                    } else {
+                        redact(value)
+                    };
+                    (key, value)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(redact).collect()),
+        other => other,
+    }
+}
+
+fn mask(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= 8 {
+        return "****".to_owned();
+    }
+    let head: String = chars[..4].iter().collect();
+    let tail: String = chars[chars.len() - 4..].iter().collect();
+    format!("{head}…{tail}")
 }
 
 fn parse_arg<'a>(rest: &'a [String], command: &str) -> Result<&'a str, String> {
