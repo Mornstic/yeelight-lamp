@@ -55,6 +55,7 @@
 | **四档场景** | 办公 / 专注 / 阅读 / 休闲，一键切换；手动调节后自动回到「自定义」 |
 | **自动补光** | 交给灯体按环境光调节，开启后回读真实亮度与色温 |
 | **托盘三态** | 开灯 / 关灯 / 离线三种图标，跟随深色、浅色任务栏自动切换 |
+| **深浅色主题** | 默认跟随 Windows 应用主题，也可固定浅色 / 深色；浅色是暖白纸感面板与银灰机身 |
 | **全局快捷键** | 开关灯与亮度 ±，共 3 组；默认关闭，可逐条启用、随意改键 |
 | **安静常驻** | 单实例、开机自启、断线自动重连、设备换 IP 自动发现 |
 | **原生质感** | Rust + Tauri 2，安装包约 2.5 MB；界面手写 HTML / CSS，无前端框架 |
@@ -65,16 +66,16 @@
   <img src="docs/screenshots/panel-on.png" width="45%" alt="亮灯状态">
   <img src="docs/screenshots/panel-preset.png" width="45%" alt="阅读场景">
 </p>
-<p align="center"><sub>左：亮灯状态与场景切换　右：阅读场景</sub></p>
+<p align="center"><sub>左：跟随系统的浅色面板　右：深色主题下的阅读场景</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/panel-settings.png" width="45%" alt="设置与快捷键">
   <img src="docs/screenshots/panel-offline.png" width="45%" alt="设备离线">
 </p>
-<p align="center"><sub>左：设置与快捷键　右：设备离线与重连</sub></p>
+<p align="center"><sub>左：设置、快捷键与外观选项　右：设备离线与重连</sub></p>
 
 面板不是系统控件的拼装：玻璃层次、随灯色温渲染的暖光、滑杆与开关的按压反馈都单独绘制；
-托盘图标也按深色、浅色任务栏各准备了一套。
+深色保留夜间氛围，浅色则是暖白纸感与银灰机身，深色屏幕和灯体是仅有的暗面。托盘图标也按深色、浅色任务栏各准备了一套。
 
 <p align="center">
   <img src="docs/screenshots/tray-icons.png" width="760" alt="应用图标与托盘三态">
@@ -87,6 +88,7 @@
 - 右键单击托盘图标：显示面板、开灯 / 关灯、自动补光、退出
 - 在面板中拖动亮度或色温会写入灯体；灯关着时会先开灯再写值
 - 设置页可以配置开机自启、全局快捷键总开关，并逐条录制组合键
+- 设置页的「外观」可切换跟随系统 / 浅色 / 深色；默认跟随 Windows 应用主题，选择后立即生效
 - 面板关闭后程序仍在托盘运行；需要完全退出时使用托盘右键菜单的「退出」
 
 ## 场景与自动补光
@@ -121,14 +123,14 @@
 
 | 文件 | 说明 |
 |---|---|
-| `yeelight-lamp_0.1.3_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
-| `yeelight-lamp_0.1.3_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
+| `yeelight-lamp_0.2.0_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
+| `yeelight-lamp_0.2.0_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
 | `SHA256SUMS.txt` | 安装包与便携包的 SHA-256 校验和 |
 
 下载后可在 PowerShell 中校验：
 
 ```powershell
-Get-FileHash .\yeelight-lamp_0.1.3_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\yeelight-lamp_0.2.0_x64-setup.exe -Algorithm SHA256
 ```
 
 > [!WARNING]
@@ -149,7 +151,7 @@ npm run tauri build
 
 产物：
 
-- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.1.3_x64-setup.exe`
+- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.2.0_x64-setup.exe`
 - 可执行文件 `src-tauri/target/release/yeelight-lamp.exe`
 
 生成发布资产（ASCII 命名的安装包、免安装 ZIP 与校验和）：
@@ -256,8 +258,8 @@ yeelight-lamp/
 | `config.rs` | token 配置读取与本机 `config.json` 的 IP 回写 |
 | `app.rs` | 托盘菜单、状态轮询、命令分发与单实例 |
 | `hotkeys.rs` | 全局快捷键注册、组合键映射与冲突检测 |
-| `theme.rs` | 任务栏明暗主题检测与托盘图标选择 |
-| `settings.rs` | 快捷键、自启动等设置读写 |
+| `theme.rs` | 系统明暗检测、面板主题解析与托盘图标选择 |
+| `settings.rs` | 快捷键、自启动、外观等设置读写 |
 | `ui/index.html` | 玻璃面板、设置页、快捷键录制与防抖写入 |
 | `bin/lampctl.rs` | 终端调试工具：状态、开关、亮度、色温与原始命令 |
 
@@ -296,7 +298,7 @@ GitHub Actions 在 Windows runner 上执行同样的格式、Clippy 和测试检
 
 ## 版本
 
-当前版本 **v0.1.3**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前版本 **v0.2.0**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 许可证
 

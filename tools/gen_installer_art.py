@@ -1,5 +1,6 @@
 """Generate NSIS header/sidebar bitmaps from the app icon."""
 
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -7,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 ICON = ROOT / "src-tauri" / "icons" / "icon.png"
 OUT = ROOT / "src-tauri" / "icons"
+VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 FONT = Path("C:/Windows/Fonts/msyhbd.ttc")
 FONT_LIGHT = Path("C:/Windows/Fonts/msyh.ttc")
 
@@ -106,7 +108,7 @@ def sidebar():
         x += cw + gap
 
     text(draw, (w // 2, 270 * S), "局域网直连 · 断网可用", font(FONT_LIGHT, 8 * S), (170, 173, 180, 255), "ma")
-    text(draw, (w // 2, 291 * S), "v0.1.3", font(FONT_LIGHT, 7 * S), (126, 129, 136, 255), "ma")
+    text(draw, (w // 2, 291 * S), f"v{VERSION}", font(FONT_LIGHT, 7 * S), (126, 129, 136, 255), "ma")
 
     rim = Image.new("RGBA", (w, 2 * S), (0, 0, 0, 0))
     ImageDraw.Draw(rim).rectangle((0, 0, w, 2 * S), fill=(255, 255, 255, 22))

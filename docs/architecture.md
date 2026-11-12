@@ -4,7 +4,7 @@
 >
 > 目标不是复述代码，而是让你能回答三个问题：**为什么这样设计、数据怎么流动、出问题时该看哪里。**
 >
-> 适用版本：v0.1.3（2026-11-09）
+> 适用版本：v0.2.0
 
 ---
 
@@ -166,10 +166,10 @@ Python 只做两件一次性的事：
 | `src-tauri/src/device.rs` | 灯语义层：属性、预设、发现 | `Lamp::connect`、`status` |
 | `src-tauri/src/miio.rs` | miIO 协议与加解密 | `MiioClient::exchange` |
 | `src-tauri/src/config.rs` | token 配置读取、IP 回写 | `Config::parse` |
-| `src-tauri/src/settings.rs` | 快捷键/自启动设置 | `Settings` |
+| `src-tauri/src/settings.rs` | 快捷键/自启动/外观设置 | `Settings` |
 | `src-tauri/src/window.rs` | 窗口定位、开合动画握手 | `close` / `toggle` |
 | `src-tauri/src/hotkeys.rs` | 快捷键注册与映射 | `sync` / `code_for` |
-| `src-tauri/src/theme.rs` | 任务栏明暗探测 | `taskbar_is_light` |
+| `src-tauri/src/theme.rs` | 任务栏与面板明暗 | `resolve` / `taskbar_is_light` |
 | `src-tauri/src/bin/lampctl.rs` | 命令行调试工具 | `run_lamp` |
 | `ui/index.html` | 全部前端 | `render` / `writer` / 事件绑定 |
 | `tools/py/get_token.py` | 一次性 token 获取 | `exchange` / `main` |
@@ -661,7 +661,7 @@ token 等同于控制权。如果怀疑泄漏：
 ### 8.4 `settings.rs`：应用设置
 
 - 默认路径 `%APPDATA%\yeelight-lamp\settings.json`，可用 `YEELIGHT_LAMP_SETTINGS` 覆盖
-- `Settings`：`hotkeys_enabled`（总开关，默认 false）、`Hotkeys`（3 组）、`autostart`（默认 true）、`show_on_launch`（默认 false）
+- `Settings`：`hotkeys_enabled`（总开关，默认 false）、`Hotkeys`（3 组）、`autostart`（默认 true）、`show_on_launch`（默认 false）、`appearance`（`system` / `light` / `dark`，默认 `system`）
 - 所有字段 `#[serde(default)]`：旧版本/缺字段也能读，损坏时回落到默认值
 - 保存同样使用临时文件 + rename
 
@@ -670,14 +670,14 @@ token 等同于控制权。如果怀疑泄漏：
 这是最“中枢”的文件：
 
 - `Snapshot`：发给前端的完整状态（connection、configured、power、brightness、colorTemp、mode、autoFill、ip、latencyMs、error、deviceName、model）
-- `AppState`：`lamp`、`snapshot`、`settings`
+- `AppState`：`lamp`、`snapshot`、`settings`、`theme`
 - `Request`：SetPower / SetBrightness / SetColorTemp / SetMode / SetAutoFill / Reconnect
 - `apply_request()`：所有写操作的统一入口
 - `poll_once()` / `poll_loop()`：读状态
 - `publish()`：`emit` 给前端 + 更新托盘
 - `update_tray()`：根据连接/开关/主题选图标，更新 tooltip 和菜单
 - `sync_autostart()`：把设置同步到 HKCU Run
-- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`reconnect_lamp`、`close_panel`、`hide_panel`、`get_settings`、`save_settings`
+- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`reconnect_lamp`、`close_panel`、`hide_panel`、`get_settings`、`save_settings`、`get_theme`
 
 `apply_request` 的几个关键点：
 
@@ -711,16 +711,17 @@ token 等同于控制权。如果怀疑泄漏：
 
 亮度快捷键每次 ±5，并在 1–100 之间 clamp。
 
-### 8.8 `theme.rs`：任务栏明暗
+### 8.8 `theme.rs`：任务栏与面板明暗
 
-读取：
+两者读的是同一个注册表位置，但值不同：
 
 ```text
 HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
-  SystemUsesLightTheme (DWORD)
+  SystemUsesLightTheme (DWORD)  → 托盘图标
+  AppsUseLightTheme  (DWORD)  → 面板
 ```
 
-注意：任务栏用的是 `SystemUsesLightTheme`，应用窗口用的是 `AppsUseLightTheme`，两者是独立设置。读不到时按深色处理。`update_tray()` 每次发布状态都会重新读一次，所以用户切换任务栏主题后，最迟一个轮询周期内图标会跟着换。
+`Settings.appearance` 只覆盖面板：`system`（默认）跟随 `AppsUseLightTheme`，`light` / `dark` 固定。`AppState.theme` 缓存解析结果，`sync_theme()` 在每个轮询周期开始时检查，变化时 `emit("theme-changed")`；`get_theme` 命令返回 `{ appearance, theme }`，保存设置后同样会发出事件。读不到注册表时按深色处理。任务栏图标始终跟随任务栏，不受面板外观覆盖影响。
 
 ### 8.9 `lampctl.rs`：命令行验证工具
 
@@ -1082,7 +1083,7 @@ NSIS 配置：
 4. `gh release create v<version> --notes-file ... <assets>`
 5. 本机用新安装包覆盖安装，验证文件版本、自启动路径、托盘行为
 
-v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
+v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备；v0.2.0 增加跟随系统的浅色/深色外观与暖白纸感浅色主题。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
 
 ### 12.5 没有自动化的部分
 
@@ -1288,7 +1289,7 @@ v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI 
 - README、协议笔记、截图、贡献指南、行为准则、安全策略
 - CI（fmt / clippy / test）、CodeQL、依赖告警清理
 - NSIS 品牌化安装包、portable zip、SHA-256
-- v0.1.0 首发，v0.1.1 图标与动画更新，v0.1.2 修复离线重连闪窗，v0.1.3 自适应轮询与重连容忍
+- v0.1.0 首发，v0.1.1 图标与动画更新，v0.1.2 修复离线重连闪窗，v0.1.3 自适应轮询与重连容忍，v0.2.0 深浅色外观
 - 本机安装验证：文件版本、卸载项、自启动路径、托盘行为
 
 ### 留下的经验
@@ -1312,7 +1313,7 @@ v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI 
 | 快捷键 | `src-tauri/src/hotkeys.rs` |
 | token 配置 | `src-tauri/src/config.rs` |
 | 应用设置 | `src-tauri/src/settings.rs` |
-| 任务栏主题 | `src-tauri/src/theme.rs` |
+| 任务栏与面板主题 | `src-tauri/src/theme.rs` |
 | 面板前端 | `ui/index.html` |
 | token 获取 | `tools/py/get_token.py` |
 | 图标生成 | `tools/gen_icons.py` |
