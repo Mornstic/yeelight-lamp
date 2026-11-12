@@ -57,7 +57,7 @@
 | **托盘三态** | 开灯 / 关灯 / 离线三种图标，跟随深色、浅色任务栏自动切换 |
 | **深浅色主题** | 默认跟随 Windows 应用主题，也可固定浅色 / 深色；浅色是暖白纸感面板与银灰机身 |
 | **全局快捷键** | 开关灯与亮度 ±，共 3 组；默认关闭，可逐条启用、随意改键 |
-| **安静常驻** | 单实例、开机自启、断线自动重连、设备换 IP 自动发现 |
+| **安静常驻** | 单实例、开机自启、断线自动重连、设备换 IP 自动发现；面板关闭即释放 WebView2，后台只留托盘主进程 |
 | **原生质感** | Rust + Tauri 2，安装包约 2.5 MB；界面手写 HTML / CSS，无前端框架 |
 
 ## 界面
@@ -123,14 +123,14 @@
 
 | 文件 | 说明 |
 |---|---|
-| `yeelight-lamp_0.2.0_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
-| `yeelight-lamp_0.2.0_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
+| `yeelight-lamp_0.2.1_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
+| `yeelight-lamp_0.2.1_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
 | `SHA256SUMS.txt` | 安装包与便携包的 SHA-256 校验和 |
 
 下载后可在 PowerShell 中校验：
 
 ```powershell
-Get-FileHash .\yeelight-lamp_0.2.0_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\yeelight-lamp_0.2.1_x64-setup.exe -Algorithm SHA256
 ```
 
 > [!WARNING]
@@ -151,7 +151,7 @@ npm run tauri build
 
 产物：
 
-- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.2.0_x64-setup.exe`
+- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.2.1_x64-setup.exe`
 - 可执行文件 `src-tauri/target/release/yeelight-lamp.exe`
 
 生成发布资产（ASCII 命名的安装包、免安装 ZIP 与校验和）：
@@ -209,7 +209,8 @@ Windows 11 会把新图标折叠进任务栏的 `^` 溢出区，把它拖到任�
 组合键与其它软件冲突时，点击键帽重新录制。
 
 **关掉面板后程序还在运行吗？**
-在。关闭面板只是隐藏窗口，托盘仍在后台控制挂灯；需要完全退出时使用托盘右键菜单的「退出」。
+在。关闭面板会销毁窗口并释放 WebView2，只保留托盘主进程继续控制挂灯；
+再次打开时会重新创建面板，约 0.3–0.5 秒出现。需要完全退出时使用托盘右键菜单的「退出」。
 
 **会上传数据吗？**
 不会。日常运行只与局域网内的灯通信，不访问云端，也没有遥测。
@@ -298,7 +299,7 @@ GitHub Actions 在 Windows runner 上执行同样的格式、Clippy 和测试检
 
 ## 版本
 
-当前版本 **v0.2.0**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前版本 **v0.2.1**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 许可证
 

@@ -161,9 +161,7 @@ pub fn run() {
             if args.iter().any(|arg| arg == "--autostart") {
                 return;
             }
-            if let Some(window) = app.get_webview_window("panel") {
-                crate::window::show(&window);
-            }
+            crate::window::request_show(app);
         }))
         .plugin(
             tauri_plugin_autostart::Builder::new()
@@ -199,14 +197,13 @@ pub fn run() {
             reconnect_lamp,
             close_panel,
             hide_panel,
+            panel_ready,
             get_settings,
             save_settings,
             get_theme,
         ])
         .setup(move |app| {
             log::info!("Yeelight 屏幕挂灯 {} 启动", env!("CARGO_PKG_VERSION"));
-            let window = app.get_webview_window("panel").expect("panel 窗口不存在");
-            crate::window::prepare(&window)?;
 
             setup_tray(app.handle())?;
             update_tray(app.handle(), &initial);
@@ -215,7 +212,7 @@ pub fn run() {
             let force_show =
                 cfg!(debug_assertions) || std::env::var_os("YEELIGHT_LAMP_KEEP_OPEN").is_some();
             if force_show || !launch_by_autostart || show_on_launch {
-                crate::window::show(&window);
+                crate::window::request_show(app.handle());
             }
 
             let handle = app.handle().clone();
@@ -250,13 +247,21 @@ pub fn run() {
             }
             WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(panel) = window.app_handle().get_webview_window("panel") {
-                    let _ = crate::window::prepare(&panel);
+                    crate::window::prepare(&panel);
                 }
             }
             _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("Tauri 启动失败");
+        .build(tauri::generate_context!())
+        .expect("Tauri 启动失败")
+        .run(|_, event| {
+            // 面板按需创建，最后一个窗口销毁时不退出；托盘“退出”带退出码，照常结束
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -294,9 +299,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                if let Some(window) = tray.app_handle().get_webview_window("panel") {
-                    crate::window::toggle(&window);
-                }
+                crate::window::toggle(tray.app_handle());
             }
         })
         .build(app)?;
@@ -312,11 +315,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 
 fn handle_menu(app: &AppHandle, id: &str) {
     match id {
-        "show" => {
-            if let Some(window) = app.get_webview_window("panel") {
-                crate::window::show(&window);
-            }
-        }
+        "show" => crate::window::request_show(app),
         "power" | "autofill" => {
             let app = app.clone();
             let kind = if id == "power" { "power" } else { "autofill" };
@@ -692,9 +691,12 @@ fn close_panel(app: AppHandle) {
 
 #[tauri::command]
 fn hide_panel(app: AppHandle) {
-    if let Some(window) = app.get_webview_window("panel") {
-        crate::window::finish_hide(&window);
-    }
+    crate::window::finish_hide(&app);
+}
+
+#[tauri::command]
+fn panel_ready(app: AppHandle) {
+    crate::window::ready(&app);
 }
 
 #[tauri::command]

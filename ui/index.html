@@ -1827,7 +1827,7 @@
       </div>
 
       <footer class="settings-foot">
-        <span id="appVersion">v0.2.0</span>
+        <span id="appVersion">v0.2.1</span>
         <span>本地直连 · 不经过云端</span>
       </footer>
     </section>
@@ -2431,12 +2431,16 @@
     invoke("get_theme").then(applyThemeState).catch((error) => console.error("get_theme", error));
   });
   listen("panel-hide", animateOut);
-  invoke("lamp_snapshot").then(render).catch((error) => console.error("lamp_snapshot", error));
-  invoke("get_settings").then(applySettings).catch((error) => console.error("get_settings", error));
-  invoke("get_theme").then(applyThemeState).catch((error) => console.error("get_theme", error));
-  window.__TAURI__.app?.getVersion?.()
-    .then((version) => { appVersion.textContent = `v${version}`; })
-    .catch((error) => console.error("getVersion", error));
+  Promise.all([
+    invoke("lamp_snapshot").then(render).catch((error) => console.error("lamp_snapshot", error)),
+    invoke("get_settings").then(applySettings).catch((error) => console.error("get_settings", error)),
+    invoke("get_theme").then(applyThemeState).catch((error) => console.error("get_theme", error)),
+    Promise.resolve(window.__TAURI__.app?.getVersion?.())
+      .then((version) => { appVersion.textContent = `v${version}`; })
+      .catch((error) => console.error("getVersion", error)),
+  ]).finally(() => {
+    invoke("panel_ready").catch((error) => console.error("panel_ready", error));
+  });
 </script>
 </body>
 </html>

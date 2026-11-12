@@ -124,7 +124,7 @@ Python 只做两件一次性的事：
 │                  │                                                    │
 │  ┌───────────────▼──────────────┐   ┌──────────────────────────────┐  │
 │  │ device.rs：灯的能力与发现     │   │ hotkeys.rs：全局快捷键         │  │
-│  │  · 开关/亮度/色温/模式/补光   │   │ window.rs：面板显示/隐藏       │  │
+│  │  · 开关/亮度/色温/模式/补光   │   │ window.rs：面板按需创建/销毁   │  │
 │  │  · IP 解析、DID 校验          │   │ theme.rs：任务栏明暗          │  │
 │  └───────────────┬──────────────┘   │ settings.rs：设置持久化       │  │
 │                  │                  │ config.rs：token 配置         │  │
@@ -151,8 +151,8 @@ Python 只做两件一次性的事：
 1. `main.rs` 调用 `yeelight_lamp::run()`，进入 `app.rs`。
 2. 读取 `%APPDATA%\yeelight-lamp\settings.json`；读取 `config.json`（没有就进入“未配置”状态）。
 3. 创建 Tauri 应用，注册插件：单实例、自启动、全局快捷键、日志。
-4. `setup` 中定位面板窗口、创建托盘和菜单、按初始快照设置托盘图标。
-5. 若不是开机自启（或设置要求显示），打开面板；开发模式下强制显示。
+4. `setup` 中创建托盘和菜单、按初始快照设置托盘图标；面板窗口此时还不存在。
+5. 若不是开机自启（或设置要求显示），请求显示面板；开发模式下强制显示。`request_show()` 会按需创建窗口。
 6. 启动轮询任务；异步同步快捷键和开机自启。
 7. 轮询成功后，快照变为 `online`，托盘图标、tooltip、面板同步更新。
 
@@ -167,7 +167,7 @@ Python 只做两件一次性的事：
 | `src-tauri/src/miio.rs` | miIO 协议与加解密 | `MiioClient::exchange` |
 | `src-tauri/src/config.rs` | token 配置读取、IP 回写 | `Config::parse` |
 | `src-tauri/src/settings.rs` | 快捷键/自启动/外观设置 | `Settings` |
-| `src-tauri/src/window.rs` | 窗口定位、开合动画握手 | `close` / `toggle` |
+| `src-tauri/src/window.rs` | 面板按需创建、首屏就绪握手、销毁与定位 | `request_show` / `finish_hide` |
 | `src-tauri/src/hotkeys.rs` | 快捷键注册与映射 | `sync` / `code_for` |
 | `src-tauri/src/theme.rs` | 任务栏与面板明暗 | `resolve` / `taskbar_is_light` |
 | `src-tauri/src/bin/lampctl.rs` | 命令行调试工具 | `run_lamp` |
@@ -184,11 +184,16 @@ Python 只做两件一次性的事：
 ```text
 用户左键托盘图标
   → Tauri TrayIconEvent::Click（app.rs）
-  → window::toggle(&window)
-  → 窗口当前不可见 → window::show()
-      · 取消关闭状态、递增 epoch
-      · 按鼠标所在显示器的工作区右下角定位（16dp 边距）
-      · window.show() + set_focus()
+  → window::toggle(app.handle())
+  → 还没有面板窗口 → window::request_show()
+      · 从 tauri.conf.json 的 panel 配置创建 WebviewWindow（创建约 0.25–0.35s）
+      · 创建后立即按鼠标所在显示器的工作区右下角定位（16dp 边距）
+      · AWAITING_READY = true，窗口保持隐藏，等前端把首屏渲染完
+      · 另起 1500ms 兜底线程：页面加载失败时也要显示，避免点击没有反馈
+  → 前端加载后并行拉取快照、设置、主题并渲染
+      → invoke("panel_ready")
+  → window::ready()
+      · 清 AWAITING_READY、定位、window.show() + set_focus()
       · emit("panel-show")
   → 前端 listen("panel-show") → animateIn()
       · 移除 is-leaving / is-entering，强制 reflow
@@ -200,21 +205,23 @@ Python 只做两件一次性的事：
 ```text
 托盘再次点击 / 按 Esc / 点击面板外 / 点窗口关闭
   → window::close()
-      · 若正在关闭则直接返回（幂等）
+      · 若不可见或正在关闭则直接返回（幂等）
       · CLOSING = true，递增 epoch
       · emit("panel-hide")
-      · 启动 450ms 兜底线程：若 epoch 没变，直接 hide()
+      · 启动 450ms 兜底线程：若 epoch 没变，直接 destroy()
   → 前端 animateOut()
       · 添加 is-leaving → CSS panel-out 0.18s
       · animationend 或 280ms 超时后 invoke("hide_panel")
   → window::finish_hide()
-      · 递增 epoch、CLOSING = false、window.hide()
+      · 递增 epoch、清 CLOSING / AWAITING_READY
+      · window.destroy() —— 窗口和 WebView2 进程一起释放
 ```
 
-这套状态机解决了两个实际问题：
+这套状态机解决了三个实际问题：
 
 - **第二次点击不生效**：早期实现只判断 `is_visible()`，而窗口在退场动画期间仍然可见，导致点击被当成“打开”。现在 `CLOSING` 和 `epoch` 把“可见”和“正在关闭”分开处理。
-- **WebView 忙时窗口残留**：前端动画回调不一定可靠，后端 450ms 兜底保证窗口一定会隐藏；`epoch` 保证兜底不会误伤刚刚重新打开的面板。
+- **WebView 忙时窗口残留**：前端动画回调不一定可靠，后端 450ms 兜底保证窗口一定会销毁；`epoch` 保证兜底不会误伤刚刚重新打开的面板。
+- **后台不再背着 WebView2**：窗口销毁后进程只剩托盘主进程，下次打开再重建；创建期间的重复点击由 `CREATING` 去重。
 
 ### 4.2 点按台灯区域开关灯
 
@@ -677,7 +684,7 @@ token 等同于控制权。如果怀疑泄漏：
 - `publish()`：`emit` 给前端 + 更新托盘
 - `update_tray()`：根据连接/开关/主题选图标，更新 tooltip 和菜单
 - `sync_autostart()`：把设置同步到 HKCU Run
-- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`reconnect_lamp`、`close_panel`、`hide_panel`、`get_settings`、`save_settings`、`get_theme`
+- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`reconnect_lamp`、`close_panel`、`hide_panel`、`panel_ready`、`get_settings`、`save_settings`、`get_theme`
 
 `apply_request` 的几个关键点：
 
@@ -688,16 +695,19 @@ token 等同于控制权。如果怀疑泄漏：
 - 成功后按请求类型修正快照；失败标记离线
 - 最后 `publish()`，无论成功失败都让前端和托盘看到最新状态
 
-### 8.6 `window.rs`：窗口与关闭状态机
+### 8.6 `window.rs`：窗口生命周期与关闭状态机
 
-- `prepare()`：启动时定位
-- `show()`：递增 epoch、清 CLOSING、定位、show、focus、emit `panel-show`
-- `toggle()`：正在关闭或可见 → `close()`；否则 `show()`
-- `close()`：幂等；emit `panel-hide`；450ms 兜底隐藏
-- `finish_hide()`：前端动画结束后真正隐藏
+- `request_show()`：任意线程可用，异步调度到 Tauri 运行时；没有窗口就创建
+- `create()`：从 `tauri.conf.json` 的 `panel` 配置构建 `WebviewWindow`；配置里 `create: false`，所以启动时不会创建 WebView2
+- `ready()`：前端快照、设置、主题都渲染完后调用；清 `AWAITING_READY`、显示、聚焦、emit `panel-show`
+- `toggle()`：没有窗口 → `request_show()`；未就绪时再点一次 → 直接销毁；正在关闭或可见 → `close()`；否则重新显示
+- `close()`：幂等；emit `panel-hide`；450ms 兜底销毁
+- `finish_hide()`：前端动画结束后真正 `destroy()` 窗口，WebView2 随之退出
 - `place_bottom_right()`：取鼠标所在显示器的工作区，右下角留 16dp；高 DPI 用 `scale_factor` 换算
 
-窗口本身是 `transparent: true`、无边框、`alwaysOnTop`、`skipTaskbar`、初始隐藏。**圆角由 CSS 绘制**，窗口保持逐像素透明交给 DWM 合成，这样边缘有抗锯齿；用 GDI region 裁切只有 1-bit，高 DPI 下会有锯齿。
+窗口本身是 `transparent: true`、无边框、`alwaysOnTop`、`skipTaskbar`、`visible: false`。**圆角由 CSS 绘制**，窗口保持逐像素透明交给 DWM 合成，这样边缘有抗锯齿；用 GDI region 裁切只有 1-bit，高 DPI 下会有锯齿。
+
+面板关闭后应用不退出：`app.rs` 在 `RunEvent::ExitRequested` 里只对 `code == None`（最后一个窗口关闭）调用 `api.prevent_exit()`；托盘菜单「退出」走 `app.exit(0)`，带退出码，照常结束。
 
 ### 8.7 `hotkeys.rs`：全局快捷键
 
@@ -858,7 +868,22 @@ async function call(command, args) {
 - Esc：设置页返回，主视图请求关闭面板
 - 右键/拖拽：禁用默认菜单和拖拽，避免 WebView 的原生行为破坏“应用感”
 
-### 9.6 可访问性
+### 9.6 启动与首屏就绪握手
+
+面板是每次打开现建的，因此前端不能假设“加载完窗口已经显示”。脚本末尾会并行拉取快照、设置、主题和版本号，全部渲染完才通知后端：
+
+```js
+Promise.all([
+  invoke("lamp_snapshot").then(render),
+  invoke("get_settings").then(applySettings),
+  invoke("get_theme").then(applyThemeState),
+  window.__TAURI__.app?.getVersion?.(),
+]).finally(() => invoke("panel_ready"));
+```
+
+后端收到 `panel_ready` 才 `show()` 窗口。这样用户第一眼看到的就是正确主题、正确亮度和连接状态的完整面板，而不是先白闪一下再跳主题。页面如果加载失败，后端 1500ms 兜底仍会显示窗口，避免点击无反馈。
+
+### 9.7 可访问性
 
 虽然是一个小面板，代码里做了不少语义：
 
@@ -869,7 +894,7 @@ async function call(command, args) {
 - `inert`：设置视图和主视图互斥，避免焦点跑到不可见区域
 - `title`：错误信息通过 title 暴露，不打断视觉
 
-### 9.7 前端取舍
+### 9.8 前端取舍
 
 - **没有框架**：状态少，手写更直接；但状态多了以后需要自律
 - **预设表重复**：Rust 的 `PRESETS` 和 JS 的 `presets` 各一份；前者是权威，后者用于即时反馈。修改预设时要同时改两处
@@ -915,16 +940,17 @@ icon = [offline, off, on][state] + (light ? _light 版本 : 深色版本)
 4. 窗口尺寸 + 16dp 边距
 5. `set_position(PhysicalPosition)`
 
-`ScaleFactorChanged` 时重新定位，保证 125%/150%/200% 缩放下都贴着右下角。窗口尺寸在 `tauri.conf.json` 里是 380×578，逻辑像素。
+`ScaleFactorChanged` 时调用 `prepare()` 重新定位，保证 125%/150%/200% 缩放下都贴着右下角。窗口尺寸在 `tauri.conf.json` 里是 380×578，逻辑像素；窗口按需创建后立即定位，所以每次打开都会贴着鼠标所在显示器。
 
-### 10.3 关闭动画状态机
+### 10.3 关闭动画与释放
 
 前文已经讲过时序，这里强调设计意图：
 
 - **为什么不在后端直接 hide？** 因为要播放退场动画；直接 hide 会“啪”一下消失
 - **为什么不让前端完全负责？** WebView 可能卡顿、动画事件可能丢；后端必须有兜底
-- **为什么用 epoch？** 用户可能在 450ms 内重新打开面板；旧兜底线程不能把新面板藏掉
+- **为什么用 epoch？** 用户可能在 450ms 内重新打开面板；旧兜底线程不能把新面板销毁掉
 - **为什么 close 要幂等？** 焦点丢失、Esc、托盘点击可能几乎同时发生，重复 close 不能重复 emit/开线程
+- **为什么关闭后要 destroy 而不是 hide？** 面板不常开，常驻 WebView2 要占几百 MB；销毁后后台只剩十几 MB 的主进程，下次打开重建约 0.3–0.5 秒
 
 ### 10.4 开机自启与单实例
 
@@ -938,7 +964,7 @@ icon = [offline, off, on][state] + (light ? _light 版本 : 深色版本)
 
 - 第二个实例启动时，`single_instance` 插件触发回调
 - 如果参数里有 `--autostart`，直接忽略（避免开机时两个实例互相弹面板）
-- 否则显示已有实例的面板
+- 否则请求已有实例显示面板；面板已销毁时会重新创建
 
 ### 10.5 全局快捷键
 
@@ -1083,7 +1109,7 @@ NSIS 配置：
 4. `gh release create v<version> --notes-file ... <assets>`
 5. 本机用新安装包覆盖安装，验证文件版本、自启动路径、托盘行为
 
-v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备；v0.2.0 增加跟随系统的浅色/深色外观与暖白纸感浅色主题。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
+v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备；v0.2.0 增加跟随系统的浅色/深色外观与暖白纸感浅色主题；v0.2.1 把面板改为按需创建、关闭即销毁，背景常驻内存从约 470MB 降到约 15MB。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
 
 ### 12.5 没有自动化的部分
 
@@ -1230,6 +1256,9 @@ v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI 
 
 **为什么面板打开时是 2.5 秒、收起后变成 20 秒？**
 没有推送通道，只能轮询。面板打开时 2.5 秒保证数值跟手，收起后 20 秒把请求量降到原来的 1/8；重新打开面板会立刻刷新一次。面板上的操作是乐观更新，所以手感不受影响。
+
+**为什么关闭面板后 WebView2 不见了？**
+面板不常开，常驻的 WebView2 要占几百 MB。关闭时播放完退场动画就销毁窗口，下次打开再按需重建；重建期间先等首屏数据渲染完再显示，所以看不到白闪。
 
 **为什么面板不能模糊桌面？**
 透明窗口里的 CSS `backdrop-filter` 无法采样桌面，玻璃感是用渐变、描边、噪点和光效模拟的；这是 WebView 的边界，不是样式没写。
