@@ -58,6 +58,16 @@ impl Default for Hotkeys {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    /// 跟随 Windows 的应用深浅色模式。
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -66,6 +76,7 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     pub autostart: bool,
     pub show_on_launch: bool,
+    pub appearance: Appearance,
 }
 
 impl Default for Settings {
@@ -75,6 +86,7 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             autostart: true,
             show_on_launch: false,
+            appearance: Appearance::System,
         }
     }
 }
@@ -136,6 +148,17 @@ mod tests {
         assert!(!settings.autostart);
         assert_eq!(settings.hotkeys.toggle.key, "L");
         assert_eq!(settings.hotkeys.brightness_up.key, "ArrowUp");
+        assert_eq!(settings.appearance, Appearance::System);
+    }
+
+    #[test]
+    fn appearance_serializes_as_lowercase() {
+        assert_eq!(
+            serde_json::to_string(&Appearance::Light).unwrap(),
+            "\"light\""
+        );
+        let settings: Settings = serde_json::from_str(r#"{"appearance":"dark"}"#).unwrap();
+        assert_eq!(settings.appearance, Appearance::Dark);
     }
 
     #[test]

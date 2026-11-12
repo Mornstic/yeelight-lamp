@@ -11,7 +11,8 @@ use tokio::sync::Mutex;
 
 use crate::device::{Lamp, LampError, Status, PRESETS};
 use crate::hotkeys::HotkeyBindings;
-use crate::settings::Settings;
+use crate::settings::{Appearance, Settings};
+use crate::theme::Theme;
 
 const PANEL_POLL: Duration = Duration::from_millis(2500);
 const HIDDEN_POLL: Duration = Duration::from_secs(20);
@@ -68,11 +69,13 @@ pub struct AppState {
     lamp: Option<Lamp>,
     pub(crate) snapshot: Snapshot,
     settings: Settings,
+    theme: Theme,
 }
 
 impl AppState {
     fn new() -> Self {
         let settings = Settings::load();
+        let theme = crate::theme::resolve(settings.appearance);
         match Lamp::load() {
             Ok(lamp) => {
                 let config = lamp.config();
@@ -87,6 +90,7 @@ impl AppState {
                     lamp: Some(lamp),
                     snapshot,
                     settings,
+                    theme,
                 }
             }
             Err(err) => Self {
@@ -97,6 +101,7 @@ impl AppState {
                     ..Snapshot::default()
                 },
                 settings,
+                theme,
             },
         }
     }
@@ -196,6 +201,7 @@ pub fn run() {
             hide_panel,
             get_settings,
             save_settings,
+            get_theme,
         ])
         .setup(move |app| {
             log::info!("Yeelight 屏幕挂灯 {} 启动", env!("CARGO_PKG_VERSION"));
@@ -374,7 +380,25 @@ fn next_delay(online: bool, visible: bool, failures: u32) -> Duration {
     (OFFLINE_POLL * factor).min(OFFLINE_POLL_MAX)
 }
 
+/// 系统深浅色变化不会发通知，靠轮询周期顺带重读注册表。
+async fn sync_theme(app: &AppHandle, state: &SharedState) {
+    let changed = {
+        let mut guard = state.lock().await;
+        let next = crate::theme::resolve(guard.settings.appearance);
+        if guard.theme == next {
+            None
+        } else {
+            guard.theme = next;
+            Some(next)
+        }
+    };
+    if let Some(theme) = changed {
+        let _ = app.emit("theme-changed", theme);
+    }
+}
+
 async fn poll_once(app: &AppHandle, state: &SharedState, reconnect: bool) -> bool {
+    sync_theme(app, state).await;
     let mut guard = state.lock().await;
 
     if guard.lamp.is_none() {
@@ -680,6 +704,24 @@ async fn get_settings(state: State<'_, SharedState>) -> Result<Settings, String>
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ThemeState {
+    appearance: Appearance,
+    theme: Theme,
+}
+
+#[tauri::command]
+async fn get_theme(app: AppHandle, state: State<'_, SharedState>) -> Result<ThemeState, String> {
+    let shared = state.inner().clone();
+    sync_theme(&app, &shared).await;
+    let guard = shared.lock().await;
+    Ok(ThemeState {
+        appearance: guard.settings.appearance,
+        theme: guard.theme,
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SaveOutcome {
     settings: Settings,
     hotkey_error: Option<String>,
@@ -691,10 +733,17 @@ async fn save_settings(
     state: State<'_, SharedState>,
     settings: Settings,
 ) -> Result<SaveOutcome, String> {
-    {
+    let changed_theme = {
         let mut guard = state.lock().await;
         settings.save().map_err(|err| err.to_string())?;
         guard.settings = settings.clone();
+        let next = crate::theme::resolve(settings.appearance);
+        let changed = guard.theme != next;
+        guard.theme = next;
+        changed.then_some(next)
+    };
+    if let Some(theme) = changed_theme {
+        let _ = app.emit("theme-changed", theme);
     }
 
     let failures = crate::hotkeys::sync(&app, &settings);
