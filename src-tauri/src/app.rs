@@ -29,6 +29,13 @@ const TRAY_ON_LIGHT: &[u8] = include_bytes!("../icons/tray_on_light.png");
 
 pub type SharedState = Arc<Mutex<AppState>>;
 
+/// 面板打开时唤醒轮询任务，立即从 20 秒的隐藏节奏切回 2.5 秒。
+static POLL_WAKE: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+pub(crate) fn wake_poll() {
+    POLL_WAKE.notify_one();
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -355,7 +362,10 @@ async fn poll_loop(app: AppHandle) {
         }
 
         let delay = next_delay(online, panel_visible(&app), failures);
-        tokio::time::sleep(delay).await;
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {}
+            _ = POLL_WAKE.notified() => {}
+        }
     }
 }
 

@@ -121,6 +121,7 @@ fn reveal(window: &WebviewWindow) {
     let _ = window.show();
     let _ = window.set_focus();
     let _ = window.emit("panel-show", ());
+    crate::app::wake_poll();
 }
 
 pub fn close(window: &WebviewWindow) {
