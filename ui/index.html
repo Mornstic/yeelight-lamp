@@ -1827,7 +1827,7 @@
       </div>
 
       <footer class="settings-foot">
-        <span id="appVersion">v0.2.2</span>
+        <span id="appVersion">v0.2.3</span>
         <span>本地直连 · 不经过云端</span>
       </footer>
     </section>
@@ -2066,9 +2066,17 @@
     if (slot >= 0) segmented.style.setProperty("--slot", String(slot));
   }
 
-  function setAutoFill(on) {
+  function setAutoFill(on, power, active) {
     autoFill.setAttribute("aria-checked", String(on));
-    autoFillNote.textContent = on ? "自动调节中 · 手动调节即退出" : "随环境光自动调节";
+    if (!on) {
+      autoFillNote.textContent = "随环境光自动调节";
+    } else if (!power) {
+      autoFillNote.textContent = "开灯后自动调节";
+    } else if (active) {
+      autoFillNote.textContent = "自动调节中 · 手动调节即退出";
+    } else {
+      autoFillNote.textContent = "正在同步自动补光…";
+    }
   }
 
   function updateConnection() {
@@ -2110,7 +2118,7 @@
       temp.value = String(next.colorTemp);
       applyTemp();
     }
-    setAutoFill(Boolean(next.autoFill));
+    setAutoFill(Boolean(next.autoFill), Boolean(next.power), Boolean(next.autoFillActive));
     markMode(modeByNumber[next.mode] || "custom");
 
     document.querySelector(".device-name").textContent = displayName(next.deviceName);
@@ -2237,7 +2245,7 @@
 
   autoFill.addEventListener("click", () => {
     const next = autoFill.getAttribute("aria-checked") !== "true";
-    setAutoFill(next);
+    setAutoFill(next, Boolean(snapshot?.power), Boolean(snapshot?.autoFillActive));
     call("set_auto_fill", { on: next });
   });
 

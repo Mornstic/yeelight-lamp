@@ -19,6 +19,8 @@ const HIDDEN_POLL: Duration = Duration::from_secs(20);
 const OFFLINE_POLL: Duration = Duration::from_secs(4);
 const OFFLINE_POLL_MAX: Duration = Duration::from_secs(60);
 const RECONNECT_AFTER: u32 = 3;
+/// 开启补光后给灯体留一点生效时间，避免轮询读到旧值就误判为用户已退出。
+const AUTO_FILL_GRACE: Duration = Duration::from_secs(6);
 
 const TRAY_OFFLINE: &[u8] = include_bytes!("../icons/tray_offline.png");
 const TRAY_OFF: &[u8] = include_bytes!("../icons/tray_off.png");
@@ -46,6 +48,8 @@ pub struct Snapshot {
     pub color_temp: u16,
     pub mode: u8,
     pub auto_fill: bool,
+    /// 灯体当前是否真的处于自动补光；auto_fill 表示用户偏好。
+    pub auto_fill_active: bool,
     pub ip: Option<String>,
     pub latency_ms: Option<u32>,
     pub error: Option<String>,
@@ -63,6 +67,7 @@ impl Default for Snapshot {
             color_temp: 4000,
             mode: 0,
             auto_fill: false,
+            auto_fill_active: false,
             ip: None,
             latency_ms: None,
             error: None,
@@ -77,6 +82,9 @@ pub struct AppState {
     pub(crate) snapshot: Snapshot,
     settings: Settings,
     theme: Theme,
+    auto_fill_grace: Option<Instant>,
+    pending_auto_fill: bool,
+    first_status_done: bool,
 }
 
 impl AppState {
@@ -91,6 +99,7 @@ impl AppState {
                     device_name: config.name.clone(),
                     model: config.model.clone(),
                     ip: config.ip.map(|ip| ip.to_string()),
+                    auto_fill: settings.auto_fill,
                     ..Snapshot::default()
                 };
                 Self {
@@ -98,6 +107,9 @@ impl AppState {
                     snapshot,
                     settings,
                     theme,
+                    auto_fill_grace: None,
+                    pending_auto_fill: false,
+                    first_status_done: false,
                 }
             }
             Err(err) => Self {
@@ -105,25 +117,63 @@ impl AppState {
                 snapshot: Snapshot {
                     connection: "offline",
                     error: Some(err.to_string()),
+                    auto_fill: settings.auto_fill,
                     ..Snapshot::default()
                 },
                 settings,
                 theme,
+                auto_fill_grace: None,
+                pending_auto_fill: false,
+                first_status_done: false,
             },
         }
     }
 
     fn apply_status(&mut self, status: Status, latency: u32, ip: Option<std::net::Ipv4Addr>) {
+        let first_status = !self.first_status_done;
+        self.first_status_done = true;
+
         self.snapshot.connection = "online";
         self.snapshot.power = status.power;
         self.snapshot.brightness = status.brightness;
         self.snapshot.color_temp = status.color_temp;
         self.snapshot.mode = status.mode;
-        self.snapshot.auto_fill = status.auto_fill;
+        self.snapshot.auto_fill_active = status.auto_fill && status.power;
         self.snapshot.latency_ms = Some(latency);
         self.snapshot.error = None;
         if let Some(ip) = ip {
             self.snapshot.ip = Some(ip.to_string());
+        }
+
+        // 灯在通电状态下自己退出了补光（米家/物理按键），把偏好同步为关；
+        // 断电时保留偏好，等应用再次开灯时恢复。
+        let mut preference_changed = false;
+        if status.auto_fill {
+            if !self.settings.auto_fill {
+                self.settings.auto_fill = true;
+                preference_changed = true;
+            }
+        } else if status.power && self.settings.auto_fill && !first_status {
+            let grace_passed = self
+                .auto_fill_grace
+                .map(|at| at.elapsed() >= AUTO_FILL_GRACE)
+                .unwrap_or(true);
+            if grace_passed {
+                self.settings.auto_fill = false;
+                preference_changed = true;
+            }
+        }
+        self.snapshot.auto_fill = self.settings.auto_fill;
+
+        // 应用重启时灯已经开着但补光被清掉：按偏好恢复一次。
+        if first_status && self.settings.auto_fill && status.power && !status.auto_fill {
+            self.pending_auto_fill = true;
+        }
+
+        if preference_changed {
+            if let Err(err) = self.settings.save() {
+                log::warn!("保存自动补光偏好失败：{err}");
+            }
         }
     }
 
@@ -443,6 +493,17 @@ async fn poll_once(app: &AppHandle, state: &SharedState, reconnect: bool) -> boo
     match outcome {
         Ok((status, latency)) => {
             guard.apply_status(status, latency, ip);
+            if guard.pending_auto_fill {
+                guard.pending_auto_fill = false;
+                let restored = match guard.lamp.as_mut() {
+                    Some(lamp) => lamp.set_auto_fill(true).await.is_ok(),
+                    None => false,
+                };
+                if restored {
+                    guard.snapshot.auto_fill_active = true;
+                    guard.auto_fill_grace = Some(Instant::now());
+                }
+            }
             let snapshot = guard.snapshot.clone();
             drop(guard);
             publish(app, &snapshot);
@@ -464,7 +525,13 @@ pub(crate) async fn apply_request(
     request: Request,
 ) -> Result<Snapshot, String> {
     let mut guard = state.lock().await;
-    let AppState { lamp, snapshot, .. } = &mut *guard;
+    let AppState {
+        lamp,
+        snapshot,
+        settings,
+        auto_fill_grace,
+        ..
+    } = &mut *guard;
     let Some(lamp) = lamp.as_mut() else {
         return Err("尚未配置设备，请先运行 tools/py/get_token.py".into());
     };
@@ -475,6 +542,23 @@ pub(crate) async fn apply_request(
         let _ = app.emit("lamp-state", &*snapshot);
     }
 
+    // 灯关着时开关补光只记录偏好，等应用开灯时再真正下发。
+    if let Request::SetAutoFill(on) = request {
+        if !snapshot.power {
+            let changed = settings.auto_fill != on;
+            settings.auto_fill = on;
+            snapshot.auto_fill = on;
+            snapshot.auto_fill_active = false;
+            if changed {
+                persist_auto_fill(settings);
+            }
+            let clone = snapshot.clone();
+            drop(guard);
+            publish(app, &clone);
+            return Ok(clone);
+        }
+    }
+
     let started = Instant::now();
 
     if let Request::Reconnect = request {
@@ -483,6 +567,19 @@ pub(crate) async fn apply_request(
             Ok((status, latency)) => {
                 guard_status(snapshot, status, latency);
                 snapshot.ip = lamp.ip().map(|ip| ip.to_string());
+                let changed = if snapshot.auto_fill_active {
+                    settings.auto_fill = true;
+                    true
+                } else if snapshot.power && settings.auto_fill {
+                    settings.auto_fill = false;
+                    true
+                } else {
+                    false
+                };
+                snapshot.auto_fill = settings.auto_fill;
+                if changed {
+                    persist_auto_fill(settings);
+                }
             }
             Err(err) => snapshot.mark_offline(&err.to_string()),
         }
@@ -514,6 +611,21 @@ pub(crate) async fn apply_request(
     } else {
         None
     };
+    let refreshed_active = refreshed.as_ref().map(|status| status.auto_fill);
+
+    // 用户偏好开着补光时，通过应用开灯后自动把补光恢复。
+    let power_on_restore =
+        if outcome.is_ok() && matches!(request, Request::SetPower(true)) && settings.auto_fill {
+            match lamp.set_auto_fill(true).await {
+                Ok(()) => true,
+                Err(err) => {
+                    log::warn!("开灯后恢复自动补光失败：{err}");
+                    false
+                }
+            }
+        } else {
+            false
+        };
 
     let latency = started.elapsed().as_millis() as u32;
 
@@ -531,26 +643,63 @@ pub(crate) async fn apply_request(
                 snapshot.color_temp = status.color_temp;
             }
             match request {
-                Request::SetPower(on) => snapshot.power = on,
+                Request::SetPower(on) => {
+                    snapshot.power = on;
+                    if on {
+                        if power_on_restore {
+                            snapshot.auto_fill_active = true;
+                            *auto_fill_grace = Some(Instant::now());
+                        }
+                    } else {
+                        snapshot.auto_fill_active = false;
+                    }
+                }
                 Request::SetBrightness(value) => {
                     snapshot.brightness = value.clamp(1, 100);
                     snapshot.mode = 0;
                     snapshot.auto_fill = false;
+                    snapshot.auto_fill_active = false;
+                    if settings.auto_fill {
+                        settings.auto_fill = false;
+                        persist_auto_fill(settings);
+                    }
                 }
                 Request::SetColorTemp(value) => {
                     snapshot.color_temp = value.clamp(2700, 6500);
                     snapshot.mode = 0;
                     snapshot.auto_fill = false;
+                    snapshot.auto_fill_active = false;
+                    if settings.auto_fill {
+                        settings.auto_fill = false;
+                        persist_auto_fill(settings);
+                    }
                 }
                 Request::SetMode(mode) => {
                     snapshot.mode = mode.min(4);
                     snapshot.auto_fill = false;
+                    snapshot.auto_fill_active = false;
+                    if settings.auto_fill {
+                        settings.auto_fill = false;
+                        persist_auto_fill(settings);
+                    }
                     if let Some(preset) = PRESETS.iter().find(|preset| preset.mode == mode) {
                         snapshot.brightness = preset.brightness;
                         snapshot.color_temp = preset.color_temp;
                     }
                 }
-                Request::SetAutoFill(on) => snapshot.auto_fill = on,
+                Request::SetAutoFill(on) => {
+                    if settings.auto_fill != on {
+                        settings.auto_fill = on;
+                        persist_auto_fill(settings);
+                    }
+                    snapshot.auto_fill = on;
+                    snapshot.auto_fill_active = if on {
+                        *auto_fill_grace = Some(Instant::now());
+                        refreshed_active.unwrap_or(true)
+                    } else {
+                        false
+                    };
+                }
                 Request::Reconnect => {}
             }
         }
@@ -574,13 +723,19 @@ async fn run_request(lamp: &mut Lamp, request: Request) -> Result<(), LampError>
     }
 }
 
+fn persist_auto_fill(settings: &Settings) {
+    if let Err(err) = settings.save() {
+        log::warn!("保存自动补光偏好失败：{err}");
+    }
+}
+
 fn guard_status(snapshot: &mut Snapshot, status: Status, latency: u32) {
     snapshot.connection = "online";
     snapshot.power = status.power;
     snapshot.brightness = status.brightness;
     snapshot.color_temp = status.color_temp;
     snapshot.mode = status.mode;
-    snapshot.auto_fill = status.auto_fill;
+    snapshot.auto_fill_active = status.auto_fill && status.power;
     snapshot.latency_ms = Some(latency);
     snapshot.error = None;
 }

@@ -77,6 +77,8 @@ pub struct Settings {
     pub autostart: bool,
     pub show_on_launch: bool,
     pub appearance: Appearance,
+    /// 自动补光偏好：灯断电会清掉补光模式，应用用它记住用户意图。
+    pub auto_fill: bool,
 }
 
 impl Default for Settings {
@@ -87,6 +89,7 @@ impl Default for Settings {
             autostart: true,
             show_on_launch: false,
             appearance: Appearance::System,
+            auto_fill: false,
         }
     }
 }
@@ -149,6 +152,7 @@ mod tests {
         assert_eq!(settings.hotkeys.toggle.key, "L");
         assert_eq!(settings.hotkeys.brightness_up.key, "ArrowUp");
         assert_eq!(settings.appearance, Appearance::System);
+        assert!(!settings.auto_fill);
     }
 
     #[test]
