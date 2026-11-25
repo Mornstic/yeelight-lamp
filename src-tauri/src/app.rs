@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::device::{Lamp, LampError, Status, PRESETS};
 use crate::hotkeys::HotkeyBindings;
-use crate::settings::{Appearance, Settings};
+use crate::settings::{Appearance, CustomPreset, Settings};
 use crate::theme::Theme;
 
 const PANEL_POLL: Duration = Duration::from_millis(2500);
@@ -50,6 +50,7 @@ pub struct Snapshot {
     pub auto_fill: bool,
     /// 灯体当前是否真的处于自动补光；auto_fill 表示用户偏好。
     pub auto_fill_active: bool,
+    pub custom_preset: Option<CustomPreset>,
     pub ip: Option<String>,
     pub latency_ms: Option<u32>,
     pub error: Option<String>,
@@ -68,6 +69,7 @@ impl Default for Snapshot {
             mode: 0,
             auto_fill: false,
             auto_fill_active: false,
+            custom_preset: None,
             ip: None,
             latency_ms: None,
             error: None,
@@ -100,6 +102,7 @@ impl AppState {
                     model: config.model.clone(),
                     ip: config.ip.map(|ip| ip.to_string()),
                     auto_fill: settings.auto_fill,
+                    custom_preset: settings.custom_preset,
                     ..Snapshot::default()
                 };
                 Self {
@@ -118,6 +121,7 @@ impl AppState {
                     connection: "offline",
                     error: Some(err.to_string()),
                     auto_fill: settings.auto_fill,
+                    custom_preset: settings.custom_preset,
                     ..Snapshot::default()
                 },
                 settings,
@@ -204,6 +208,7 @@ pub(crate) enum Request {
     SetColorTemp(u16),
     SetMode(u8),
     SetAutoFill(bool),
+    ApplyCustom { brightness: u8, color_temp: u16 },
     Reconnect,
 }
 
@@ -251,6 +256,8 @@ pub fn run() {
             set_color_temp,
             set_mode,
             set_auto_fill,
+            apply_custom_preset,
+            save_custom_preset,
             reconnect_lamp,
             close_panel,
             hide_panel,
@@ -592,7 +599,10 @@ pub(crate) async fn apply_request(
     let wake = !snapshot.power
         && matches!(
             request,
-            Request::SetBrightness(_) | Request::SetColorTemp(_) | Request::SetMode(_)
+            Request::SetBrightness(_)
+                | Request::SetColorTemp(_)
+                | Request::SetMode(_)
+                | Request::ApplyCustom { .. }
         );
     let outcome = if wake {
         // 固件会丢弃关灯状态下的亮度、色温写入，先开灯再写
@@ -700,6 +710,20 @@ pub(crate) async fn apply_request(
                         false
                     };
                 }
+                Request::ApplyCustom {
+                    brightness,
+                    color_temp,
+                } => {
+                    snapshot.brightness = brightness;
+                    snapshot.color_temp = color_temp;
+                    snapshot.mode = 0;
+                    snapshot.auto_fill = false;
+                    snapshot.auto_fill_active = false;
+                    if settings.auto_fill {
+                        settings.auto_fill = false;
+                        persist_auto_fill(settings);
+                    }
+                }
                 Request::Reconnect => {}
             }
         }
@@ -719,6 +743,13 @@ async fn run_request(lamp: &mut Lamp, request: Request) -> Result<(), LampError>
         Request::SetColorTemp(value) => lamp.set_color_temp(value).await,
         Request::SetMode(mode) => lamp.set_mode(mode).await,
         Request::SetAutoFill(on) => lamp.set_auto_fill(on).await,
+        Request::ApplyCustom {
+            brightness,
+            color_temp,
+        } => {
+            lamp.set_brightness(brightness).await?;
+            lamp.set_color_temp(color_temp).await
+        }
         Request::Reconnect => Ok(()),
     }
 }
@@ -840,6 +871,82 @@ async fn set_auto_fill(
     on: bool,
 ) -> Result<Snapshot, String> {
     apply_request(&app, state.inner(), Request::SetAutoFill(on)).await
+}
+
+#[tauri::command]
+async fn apply_custom_preset(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+) -> Result<Snapshot, String> {
+    let preset = {
+        let guard = state.lock().await;
+        guard.settings.custom_preset
+    };
+    let Some(preset) = preset else {
+        return Err("还没有保存我的模式".into());
+    };
+    apply_request(
+        &app,
+        state.inner(),
+        Request::ApplyCustom {
+            brightness: preset.brightness,
+            color_temp: preset.color_temp,
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn save_custom_preset(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+) -> Result<Snapshot, String> {
+    let shared = state.inner().clone();
+    let mut guard = shared.lock().await;
+    let AppState {
+        lamp,
+        snapshot,
+        settings,
+        ..
+    } = &mut *guard;
+    let Some(lamp) = lamp.as_mut() else {
+        return Err("尚未配置设备，请先运行 tools/py/get_token.py".into());
+    };
+
+    let started = Instant::now();
+    let status = lamp.status().await.map_err(|err| err.to_string())?;
+    if !status.power {
+        return Err("请先开灯再保存我的模式".into());
+    }
+    let latency = started.elapsed().as_millis() as u32;
+    let preset = CustomPreset {
+        brightness: status.brightness,
+        color_temp: status.color_temp,
+    };
+
+    settings.custom_preset = Some(preset);
+    settings.auto_fill = status.auto_fill;
+    if let Err(err) = settings.save() {
+        log::warn!("保存我的模式失败：{err}");
+        return Err(err.to_string());
+    }
+
+    snapshot.custom_preset = Some(preset);
+    snapshot.auto_fill = status.auto_fill;
+    snapshot.auto_fill_active = status.auto_fill && status.power;
+    snapshot.connection = "online";
+    snapshot.power = status.power;
+    snapshot.brightness = status.brightness;
+    snapshot.color_temp = status.color_temp;
+    snapshot.mode = status.mode;
+    snapshot.latency_ms = Some(latency);
+    snapshot.error = None;
+    snapshot.ip = lamp.ip().map(|ip| ip.to_string());
+
+    let clone = snapshot.clone();
+    drop(guard);
+    publish(&app, &clone);
+    Ok(clone)
 }
 
 #[tauri::command]

@@ -54,6 +54,7 @@
 | **顺滑调光** | 亮度 1–100%、色温 2700–6500K，拖动即时写入；关灯时调节会先开灯再写值 |
 | **四档场景** | 办公 / 专注 / 阅读 / 休闲，一键切换；手动调节后自动回到「自定义」 |
 | **自动补光** | 交给灯体按环境光调节，开启后回读真实亮度与色温；在应用里关灯再开灯会自动恢复补光 |
+| **我的模式** | 保存自己常用的亮度/色温；长按「我的」或设置页保存，点按一键调用（仅本机） |
 | **托盘三态** | 开灯 / 关灯 / 离线三种图标，跟随深色、浅色任务栏自动切换 |
 | **深浅色主题** | 默认跟随 Windows 应用主题，也可固定浅色 / 深色；浅色是暖白纸感面板与银灰机身 |
 | **全局快捷键** | 开关灯与亮度 ±，共 3 组；默认关闭，可逐条启用、随意改键 |
@@ -123,14 +124,14 @@
 
 | 文件 | 说明 |
 |---|---|
-| `yeelight-lamp_0.2.3_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
-| `yeelight-lamp_0.2.3_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
+| `yeelight-lamp_0.2.4_x64-setup.exe` | 推荐；当前用户安装，无需管理员权限，装完自动驻留托盘 |
+| `yeelight-lamp_0.2.4_x64-portable.zip` | 免安装；解压后运行 `yeelight-lamp.exe` |
 | `SHA256SUMS.txt` | 安装包与便携包的 SHA-256 校验和 |
 
 下载后可在 PowerShell 中校验：
 
 ```powershell
-Get-FileHash .\yeelight-lamp_0.2.3_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\yeelight-lamp_0.2.4_x64-setup.exe -Algorithm SHA256
 ```
 
 > [!WARNING]
@@ -151,7 +152,7 @@ npm run tauri build
 
 产物：
 
-- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.2.3_x64-setup.exe`
+- 安装包 `src-tauri/target/release/bundle/nsis/Yeelight 屏幕挂灯_0.2.4_x64-setup.exe`
 - 可执行文件 `src-tauri/target/release/yeelight-lamp.exe`
 
 生成发布资产（ASCII 命名的安装包、免安装 ZIP 与校验和）：
@@ -299,7 +300,7 @@ GitHub Actions 在 Windows runner 上执行同样的格式、Clippy 和测试检
 
 ## 版本
 
-当前版本 **v0.2.3**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前版本 **v0.2.4**，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 许可证
 

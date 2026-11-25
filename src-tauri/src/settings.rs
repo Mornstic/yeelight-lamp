@@ -68,6 +68,13 @@ pub enum Appearance {
     Dark,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomPreset {
+    pub brightness: u8,
+    pub color_temp: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -79,6 +86,8 @@ pub struct Settings {
     pub appearance: Appearance,
     /// 自动补光偏好：灯断电会清掉补光模式，应用用它记住用户意图。
     pub auto_fill: bool,
+    /// 用户保存的固定亮度/色温组合，仅存在本机。
+    pub custom_preset: Option<CustomPreset>,
 }
 
 impl Default for Settings {
@@ -90,6 +99,7 @@ impl Default for Settings {
             show_on_launch: false,
             appearance: Appearance::System,
             auto_fill: false,
+            custom_preset: None,
         }
     }
 }
@@ -153,6 +163,7 @@ mod tests {
         assert_eq!(settings.hotkeys.brightness_up.key, "ArrowUp");
         assert_eq!(settings.appearance, Appearance::System);
         assert!(!settings.auto_fill);
+        assert!(settings.custom_preset.is_none());
     }
 
     #[test]
@@ -182,5 +193,19 @@ mod tests {
         let text = serde_json::to_string(&settings).unwrap();
         let restored: Settings = serde_json::from_str(&text).unwrap();
         assert_eq!(restored, settings);
+    }
+
+    #[test]
+    fn custom_preset_roundtrips_through_json() {
+        let settings = Settings {
+            custom_preset: Some(CustomPreset {
+                brightness: 62,
+                color_temp: 3400,
+            }),
+            ..Settings::default()
+        };
+        let text = serde_json::to_string(&settings).unwrap();
+        let restored: Settings = serde_json::from_str(&text).unwrap();
+        assert_eq!(restored.custom_preset, settings.custom_preset);
     }
 }

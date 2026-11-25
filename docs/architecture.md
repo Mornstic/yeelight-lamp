@@ -504,7 +504,7 @@ MIoT 用 `siid`（service id）和 `piid`（property id）寻址。这盏灯用�
 
 这些是固件内置的组合。写 `piid 7` 切场景后，设备会同时应用亮度和色温。前端的预设表和后端的 `PRESETS` 保持一致；前端用它做即时视觉反馈，后端用它更新快照。
 
-### 6.3 固件的三个“脾气”
+### 6.3 固件的五个“脾气”
 
 1. **关灯状态下写亮度/色温会被丢弃，而且不报错。**
    所以 `apply_request` 在“当前是关灯 + 请求是亮度/色温/模式”时，会先 `set_power(true)`，再写目标值。命令行的 `lampctl light` 也走同样的 `apply_lighting` 逻辑。
@@ -517,6 +517,9 @@ MIoT 用 `siid`（service id）和 `piid`（property id）寻址。这盏灯用�
 
 4. **自动补光不是持久模式，关灯/断电会被固件清掉。**
    应用在 `settings.json` 里保存 `autoFill` 偏好：通过应用关灯再开灯时会自动恢复；手动调亮度/色温/模式或在米家里关闭补光时，偏好同步改为关。通过灯体或断电重新开灯不自动恢复。快照里 `autoFill` 表示偏好，`autoFillActive` 表示灯体当前是否真的在补光。
+
+5. **厂家模式和 mode 0 之外没有自定义预设存储。**
+   应用在 `settings.json` 保存 `customPreset`（亮度/色温），主面板第五个「我的」和设置页共用。应用时写入亮度/色温，灯回到 mode 0；前端用 mode 0 + 数值匹配显示「我的」，否则显示「自定义」。预设只在本机，米家看不到。
 
 ### 6.4 没有的东西
 
@@ -679,7 +682,7 @@ token 等同于控制权。如果怀疑泄漏：
 
 这是最“中枢”的文件：
 
-- `Snapshot`：发给前端的完整状态（connection、configured、power、brightness、colorTemp、mode、autoFill、autoFillActive、ip、latencyMs、error、deviceName、model）；`autoFill` 是用户偏好，`autoFillActive` 是灯体实际状态
+- `Snapshot`：发给前端的完整状态（connection、configured、power、brightness、colorTemp、mode、autoFill、autoFillActive、customPreset、ip、latencyMs、error、deviceName、model）；`autoFill` 是用户偏好，`autoFillActive` 是灯体实际状态
 - `AppState`：`lamp`、`snapshot`、`settings`、`theme`
 - `Request`：SetPower / SetBrightness / SetColorTemp / SetMode / SetAutoFill / Reconnect
 - `apply_request()`：所有写操作的统一入口
@@ -687,7 +690,7 @@ token 等同于控制权。如果怀疑泄漏：
 - `publish()`：`emit` 给前端 + 更新托盘
 - `update_tray()`：根据连接/开关/主题选图标，更新 tooltip 和菜单
 - `sync_autostart()`：把设置同步到 HKCU Run
-- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`reconnect_lamp`、`close_panel`、`hide_panel`、`panel_ready`、`get_settings`、`save_settings`、`get_theme`
+- Tauri 命令：`lamp_snapshot`、`refresh_lamp`、`set_power`、`set_brightness`、`set_color_temp`、`set_mode`、`set_auto_fill`、`apply_custom_preset`、`save_custom_preset`、`reconnect_lamp`、`close_panel`、`hide_panel`、`panel_ready`、`get_settings`、`save_settings`、`get_theme`
 
 `apply_request` 的几个关键点：
 
@@ -1113,7 +1116,7 @@ NSIS 配置：
 4. `gh release create v<version> --notes-file ... <assets>`
 5. 本机用新安装包覆盖安装，验证文件版本、自启动路径、托盘行为
 
-v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备；v0.2.0 增加跟随系统的浅色/深色外观与暖白纸感浅色主题；v0.2.1 把面板改为按需创建、关闭即销毁，背景常驻内存从约 470MB 降到约 15MB；v0.2.2 修复面板重新打开后仍沿用 20 秒轮询间隔、自动补光数值要关了再开才显示的问题；v0.2.3 让自动补光记住用户偏好，通过应用关灯再开灯会自动恢复。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
+v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI checkout v5 的补丁版本；v0.1.2 修复离线重连时闪出 `arp.exe` 控制台窗口的问题；v0.1.3 把后台轮询改为自适应（面板 2.5 秒、收起 20 秒），并让轮询在单次丢包时不丢会话、连续失败才重新发现设备；v0.2.0 增加跟随系统的浅色/深色外观与暖白纸感浅色主题；v0.2.1 把面板改为按需创建、关闭即销毁，背景常驻内存从约 470MB 降到约 15MB；v0.2.2 修复面板重新打开后仍沿用 20 秒轮询间隔、自动补光数值要关了再开才显示的问题；v0.2.3 让自动补光记住用户偏好，通过应用关灯再开灯会自动恢复；v0.2.4 增加本地「我的模式」预设。Release 资产保持不可变，新改动走新版本，不覆盖旧资产。
 
 ### 12.5 没有自动化的部分
 
@@ -1266,6 +1269,9 @@ v0.1.0 是首个公开版本；v0.1.1 是托盘图标重绘 + 面板动画 + CI 
 
 **关灯后自动补光还会保留吗？**
 灯固件会在关灯/断电时清掉补光模式。应用把开关当成偏好保存在 `settings.json`：通过应用关灯再开灯会自动恢复；手动调亮度/色温/模式或在米家里关闭补光会同步关闭偏好；通过灯体或断电重新开灯不会自动恢复。
+
+**「我的模式」存在哪里？**
+只存在本机 `%APPDATA%\yeelight-lamp\settings.json` 的 `customPreset` 里，不上云，米家看不到。应用时把保存的亮度和色温写给灯，灯回到 mode 0；前端根据数值匹配显示「我的」，所以换电脑或重装应用需要重新保存。
 
 **为什么面板不能模糊桌面？**
 透明窗口里的 CSS `backdrop-filter` 无法采样桌面，玻璃感是用渐变、描边、噪点和光效模拟的；这是 WebView 的边界，不是样式没写。

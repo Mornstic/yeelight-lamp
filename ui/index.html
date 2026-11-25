@@ -765,8 +765,12 @@
     line-height: 1;
     letter-spacing: .02em;
     color: var(--text-3);
+    max-width: 72%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     opacity: 0;
-    transition: opacity .2s ease;
+    transition: opacity .2s ease, color .2s ease;
   }
 
   .mode-state.is-visible { opacity: 1; }
@@ -832,6 +836,65 @@
     outline: 2px solid rgb(255 255 255 / .66);
     outline-offset: -1px;
   }
+
+  .mode .segmented { --count: 5; }
+
+  .mode-my {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .mode-my .mode-star {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.25;
+    stroke-linejoin: round;
+    opacity: .7;
+    transition: fill .2s ease, opacity .2s ease;
+  }
+
+  .mode-my[data-saved="true"] .mode-star {
+    fill: currentColor;
+    opacity: 1;
+  }
+
+  .mode-my::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 3px;
+    height: 2px;
+    border-radius: 2px;
+    background: rgb(var(--lamp-rgb) / .85);
+    opacity: 0;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform .16s ease, opacity .16s ease;
+    pointer-events: none;
+  }
+
+  .mode-my.is-holding::after {
+    opacity: 1;
+    transform: scaleX(1);
+    transition: transform .72s linear, opacity .1s ease;
+  }
+
+  .mode-state.is-error { color: #e9a48f; }
+
+  html[data-theme="light"] .mode-state.is-error { color: #b5543c; }
+
+  .row-note.is-error { color: #e9a48f; }
+
+  html[data-theme="light"] .row-note.is-error { color: #b5543c; }
+
+  .row-note.is-confirmed { color: var(--text-2); }
 
   .footer {
     position: relative;
@@ -1165,6 +1228,9 @@
 
   .mini-btn:hover { background: rgb(255 255 255 / .1); color: var(--text); }
   .mini-btn:active { transform: scale(.94); }
+  .mini-btn:disabled { opacity: .42; cursor: default; background: rgb(255 255 255 / .03); }
+  .mini-btn:disabled:hover { color: var(--text-3); }
+  .mini-btn:disabled:active { transform: none; }
   .mini-btn:focus-visible { outline: 2px solid rgb(255 255 255 / .65); outline-offset: 2px; }
   .mini-btn svg { width: 13px; height: 13px; }
   .mini-btn.is-spinning svg { animation: spin .8s linear infinite; }
@@ -1544,6 +1610,10 @@
     color: color-mix(in srgb, var(--lamp) 22%, var(--text));
   }
 
+  html[data-theme="light"] .mini-btn:disabled {
+    background: rgb(84 68 46 / .04);
+  }
+
   html[data-theme="light"] .segmented button:focus-visible { outline-color: rgb(84 68 46 / .55); }
 
   html[data-theme="light"] .footer::before {
@@ -1696,8 +1766,8 @@
 
       <div class="mode">
         <div class="mode-head">
-          <span class="mode-title" title="固件内置的四档参数，手动调节后回到自定义">模式</span>
-          <span class="mode-state is-visible" id="modeState">自定义</span>
+          <span class="mode-title" title="固件内置四档参数；「我的」点击应用，长按保存当前亮度、色温">模式</span>
+          <span class="mode-state is-visible" id="modeState" aria-live="polite" aria-atomic="true">自定义</span>
         </div>
         <div class="segmented" id="segmented" role="group" aria-label="预设模式">
           <span class="seg-thumb" aria-hidden="true"></span>
@@ -1705,6 +1775,12 @@
           <button type="button" data-mode="focus" title="专注：80% 亮度，5000 K">专注</button>
           <button type="button" data-mode="read" title="阅读：100% 亮度，4000 K">阅读</button>
           <button type="button" data-mode="relax" title="休闲：30% 亮度，2700 K">休闲</button>
+          <button type="button" class="mode-my" data-mode="my" data-saved="false" title="我的模式：点击应用，长按保存当前亮度、色温" aria-label="我的模式，点击应用，长按保存当前亮度色温">
+            <svg class="mode-star" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M6 1.25 7.42 4.13l3.18.46-2.3 2.24.54 3.17L6 8.5 3.16 10l.54-3.17L1.4 4.59l3.18-.46Z"/>
+            </svg>
+            <span>我的</span>
+          </button>
         </div>
       </div>
 
@@ -1767,6 +1843,21 @@
         </div>
         <p class="hotkey-note" id="hotkeyNote" hidden></p>
 
+        <p class="group-title">模式</p>
+        <div class="group">
+          <div class="row">
+            <span class="row-copy">
+              <span class="row-label">我的模式</span>
+              <span class="row-note" id="customPresetNote" aria-live="polite">未保存，调好亮度、色温后保存</span>
+            </span>
+            <button class="mini-btn" id="savePresetBtn" type="button" aria-label="保存当前亮度、色温为我的模式" title="保存当前亮度、色温" disabled>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4.5 2.5h7v11L8 11.1 4.5 13.5z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <p class="group-title">启动</p>
         <div class="group">
           <div class="row">
@@ -1827,7 +1918,7 @@
       </div>
 
       <footer class="settings-foot">
-        <span id="appVersion">v0.2.3</span>
+        <span id="appVersion">v0.2.4</span>
         <span>本地直连 · 不经过云端</span>
       </footer>
     </section>
@@ -1886,6 +1977,9 @@
   const modeState = document.getElementById("modeState");
   const segmented = document.getElementById("segmented");
   const modeButtons = [...document.querySelectorAll("[data-mode]")];
+  const myButton = document.querySelector(".mode-my");
+  const customPresetNote = document.getElementById("customPresetNote");
+  const savePresetBtn = document.getElementById("savePresetBtn");
   const statusText = document.getElementById("statusText");
   const pillText = document.getElementById("pillText");
   const connText = document.getElementById("connText");
@@ -1953,6 +2047,13 @@
   let capturing = null;
   let lastBrightnessEdit = 0;
   let lastTempEdit = 0;
+  let modeNoticeUntil = 0;
+  let modeNoticeTimer = 0;
+  let presetNoteFlashUntil = 0;
+  let presetNoteTimer = 0;
+  let currentModeKey = "custom";
+  let myHoldTimer = 0;
+  let mySuppressClick = false;
 
   const systemPrefersLight = window.matchMedia("(prefers-color-scheme: light)");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -2054,16 +2155,18 @@
   }
 
   function markMode(mode) {
+    currentModeKey = mode;
     modeButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.mode === mode);
       button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
     });
-    modeState.classList.toggle("is-visible", mode === "custom");
-    modeState.textContent = mode === "custom" ? "自定义" : "";
-
     const slot = modeButtons.findIndex((button) => button.dataset.mode === mode);
     segmented.classList.toggle("has-thumb", slot >= 0);
     if (slot >= 0) segmented.style.setProperty("--slot", String(slot));
+    if (Date.now() < modeNoticeUntil) return;
+    modeState.classList.remove("is-error");
+    modeState.classList.toggle("is-visible", mode === "custom");
+    modeState.textContent = mode === "custom" ? "自定义" : "";
   }
 
   function setAutoFill(on, power, active) {
@@ -2077,6 +2180,74 @@
     } else {
       autoFillNote.textContent = "正在同步自动补光…";
     }
+  }
+
+  function baseModeKey() {
+    if (!snapshot) return "custom";
+    return customPresetMatches(snapshot)
+      ? "my"
+      : (modeByNumber[snapshot.mode] || "custom");
+  }
+
+  function showModeNotice(message, tone = "success") {
+    modeNoticeUntil = Date.now() + 1900;
+    window.clearTimeout(modeNoticeTimer);
+    modeState.textContent = message;
+    modeState.classList.add("is-visible");
+    modeState.classList.toggle("is-error", tone === "error");
+    modeNoticeTimer = window.setTimeout(() => {
+      modeNoticeUntil = 0;
+      modeState.classList.remove("is-error");
+      markMode(currentModeKey);
+    }, 1900);
+  }
+
+  function flashPresetNote(message, tone = "error") {
+    presetNoteFlashUntil = Date.now() + 1500;
+    customPresetNote.textContent = message;
+    customPresetNote.classList.toggle("is-error", tone === "error");
+    customPresetNote.classList.toggle("is-confirmed", tone === "success");
+    window.clearTimeout(presetNoteTimer);
+    presetNoteTimer = window.setTimeout(() => {
+      presetNoteFlashUntil = 0;
+      customPresetNote.classList.remove("is-error", "is-confirmed");
+      updateCustomPresetUi();
+    }, 1500);
+  }
+
+  function customPresetMatches(next) {
+    const preset = next?.customPreset;
+    return Boolean(preset)
+      && next.mode === 0
+      && !next.autoFillActive
+      && next.brightness === preset.brightness
+      && next.colorTemp === preset.colorTemp;
+  }
+
+  function updateCustomPresetUi() {
+    const preset = snapshot?.customPreset;
+    myButton.dataset.saved = String(Boolean(preset));
+    const online = connection === "online";
+    if (Date.now() >= presetNoteFlashUntil) {
+      if (preset) {
+        customPresetNote.textContent = `已保存 ${preset.brightness}% · ${preset.colorTemp} K`;
+      } else if (!online) {
+        customPresetNote.textContent = "设备离线，恢复后可保存";
+      } else if (snapshot?.power) {
+        customPresetNote.textContent = "未保存，调好亮度、色温后保存";
+      } else {
+        customPresetNote.textContent = "开灯后可保存当前亮度、色温";
+      }
+    }
+    const canSave = online && Boolean(snapshot?.power);
+    savePresetBtn.disabled = !canSave;
+    savePresetBtn.setAttribute("aria-disabled", String(!canSave));
+    myButton.title = preset
+      ? "我的模式：点击应用，长按覆盖保存"
+      : "我的模式：长按保存当前亮度、色温";
+    myButton.setAttribute("aria-label", preset
+      ? "我的模式，点击应用，长按覆盖保存"
+      : "我的模式，长按保存当前亮度色温");
   }
 
   function updateConnection() {
@@ -2119,12 +2290,13 @@
       applyTemp();
     }
     setAutoFill(Boolean(next.autoFill), Boolean(next.power), Boolean(next.autoFillActive));
-    markMode(modeByNumber[next.mode] || "custom");
+    markMode(customPresetMatches(next) ? "my" : (modeByNumber[next.mode] || "custom"));
 
     document.querySelector(".device-name").textContent = displayName(next.deviceName);
     document.querySelector(".row-sub").textContent = next.model || "yeelink.light.lamp43";
 
     updateConnection();
+    updateCustomPresetUi();
   }
 
   async function call(command, args) {
@@ -2228,6 +2400,7 @@
   });
 
   modeButtons.forEach((button) => {
+    if (button.dataset.mode === "my") return;
     button.addEventListener("click", () => {
       const preset = presets[button.dataset.mode];
       if (!preset) return;
@@ -2242,6 +2415,98 @@
       call("set_mode", { mode: preset.mode });
     });
   });
+
+  async function saveCurrentPreset() {
+    if (!snapshot) return;
+    if (connection !== "online") {
+      showModeNotice("设备离线", "error");
+      flashPresetNote("设备离线，稍后再试");
+      return;
+    }
+    if (!snapshot.power) {
+      showModeNotice("开灯后才能保存", "error");
+      flashPresetNote("开灯后才能保存");
+      return;
+    }
+    try {
+      const next = await invoke("save_custom_preset");
+      if (!next) return;
+      render(next);
+      const preset = next.customPreset;
+      if (preset) {
+        showModeNotice(`已保存 ${preset.brightness}% · ${preset.colorTemp} K`);
+        flashPresetNote("已保存到我的模式", "success");
+      }
+    } catch (error) {
+      console.error("save_custom_preset", error);
+      showModeNotice("保存失败，请重试", "error");
+      flashPresetNote("保存失败，请重试");
+    }
+  }
+
+  function applyMyPreset() {
+    if (connection !== "online") {
+      showModeNotice("设备离线", "error");
+      return;
+    }
+    if (!snapshot?.customPreset) {
+      showModeNotice(
+        snapshot?.power ? "调好亮度、色温后长按保存" : "开灯后才能保存",
+        snapshot?.power ? "hint" : "error"
+      );
+      return;
+    }
+    const preset = snapshot.customPreset;
+    lastBrightnessEdit = Date.now();
+    lastTempEdit = Date.now();
+    setPower(true);
+    brightness.value = String(preset.brightness);
+    temp.value = String(preset.colorTemp);
+    applyBrightness();
+    applyTemp();
+    markMode("my");
+    invoke("apply_custom_preset")
+      .then((next) => {
+        if (!next) return;
+        render(next);
+        showModeNotice("已应用我的模式");
+      })
+      .catch((error) => {
+        console.error("apply_custom_preset", error);
+        showModeNotice("应用失败，请重试", "error");
+      });
+  }
+
+  function cancelMyHold() {
+    window.clearTimeout(myHoldTimer);
+    myButton.classList.remove("is-holding");
+  }
+
+  myButton.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (!snapshot || connection !== "online" || !snapshot.power) return;
+    cancelMyHold();
+    mySuppressClick = false;
+    myButton.classList.add("is-holding");
+    myHoldTimer = window.setTimeout(() => {
+      myButton.classList.remove("is-holding");
+      mySuppressClick = true;
+      saveCurrentPreset();
+      window.setTimeout(() => { mySuppressClick = false; }, 700);
+    }, 720);
+  });
+  myButton.addEventListener("pointerup", cancelMyHold);
+  myButton.addEventListener("pointerleave", cancelMyHold);
+  myButton.addEventListener("pointercancel", cancelMyHold);
+  myButton.addEventListener("click", () => {
+    if (mySuppressClick) {
+      mySuppressClick = false;
+      return;
+    }
+    applyMyPreset();
+  });
+
+  savePresetBtn.addEventListener("click", saveCurrentPreset);
 
   autoFill.addEventListener("click", () => {
     const next = autoFill.getAttribute("aria-checked") !== "true";
